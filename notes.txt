@@ -1,0 +1,88 @@
+// sample netlist
+Net A: gates 1, 3, 4
+
+Net B: gates 2, 3
+
+Net C: gates 2, 5
+
+Net D: gates 3, 4, 5
+
+18 20   
+1 2 20 19      
+2 2 2 1       
+3 2 1 18
+4 3 3 4 5       
+5 6 6 5 4 3 7 8 
+6 2 9 4
+7 2 10 3
+8 2 19 9
+9 2 9 10
+10 4 11 10 12 13 
+11 2 12 16
+12 2 7 6 
+13 2 12 11 
+14 2 14 17
+15 2 8 15 
+16 5 15 16 17 18 7 
+17 4 16 17 18 14 
+18 5 13 16 17 18 12
+6              
+1 12 25 0   
+2 17 50 100    
+3 18 100 50       
+4 2 0 50      
+5 19 0 25      
+6 20 75 100
+
+
+https://libeigen.gitlab.io/eigen/docs-nightly/group__TutorialMatrixClass.html
+
+
+https://libeigen.gitlab.io/eigen/docs-nightly/group__TutorialLinearAlgebra.html
+
+
+
+Handy CMake commands
+cmake_minimum_required(VERSION x.x) – Sets the minimum CMake version required.
+project(name LANGUAGES CXX C) – Defines the project name and languages.
+add_executable(target src1 src2 ...) – Builds an executable from source files.
+add_library(target src1 src2 ...) – Builds a library (static/shared).
+target_link_libraries(target lib1 lib2 ...) – Links libraries to a target.
+target_include_directories(target PUBLIC|PRIVATE dir) – Adds include paths.
+set(VAR value) – Defines a variable.
+include(path/to/file.cmake) – Includes another CMake script.
+find_package(Package REQUIRED) – Locates installed packages or modules.
+    - find_package locates and loads settings for external libraries or tools.
+    - It searches for a <Package>Config.cmake or a Find<Package>.cmake module, sets variables (like include dirs, libs), and lets you link with:
+    - Yes — the library must already be installed locally (or accessible via a path).
+    - You can reuse one installation across all projects; find_package just locates it—it doesn’t install it.
+FetchContent – downloads source at configure time (modern and preferred):
+    include(FetchContent)
+    FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git)
+    FetchContent_MakeAvailable(fmt)
+find_library(VAR name PATHS ...) – Searches for a library file.
+find_path(VAR name PATHS ...) – Searches for header directories.
+add_subdirectory(dir) – Adds a subproject or nested CMakeLists.
+install(TARGETS target DESTINATION dir) – Defines install rules.
+message(STATUS "Text") – Prints messages during configuration.
+option(NAME "desc" ON|OFF) – Defines a toggleable build option.
+
+Handy lldb commands:
+| Purpose                          | Command                              | Example                   |
+| -------------------------------- | ------------------------------------ | ------------------------- |
+| **Run program**                  | `run`                                | `run arg1 arg2`           |
+| **Set breakpoint**               | `breakpoint set -f <file> -l <line>` | `b main.cpp:42`           |
+| **List breakpoints**             | `breakpoint list`                    | `br list`                 |
+| **Continue execution**           | `continue`                           | `c`                       |
+| **Step into / over / out**       | `step` / `next` / `finish`           | `s` / `n` / `f`           |
+| **Print variable**               | `print <expr>`                       | `p x`, `p myStruct.field` |
+| **Evaluate C++ expression**      | `expr <expr>`                        | `expr vec.size()`         |
+| **Show locals**                  | `frame variable`                     | `fr v`                    |
+| **Show call stack**              | `bt`                                 | —                         |
+| **Switch frame**                 | `frame select <idx>`                 | `f 1`                     |
+| **Inspect memory (hex)**         | `memory read <addr> [size]`          | `mem read 0x7ffee3b2 64`  |
+| **Inspect memory (ASCII)**       | `x/s <addr>`                         | `x/s ptr`                 |
+| **Disassemble current function** | `disassemble`                        | —                         |
+| **Watch a variable**             | `watchpoint set variable <var>`      | `watch set var count`     |
+| **Show registers**               | `register read`                      | —                         |
+| **Quit LLDB**                    | `quit`                               | `q`                       |
