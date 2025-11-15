@@ -296,3 +296,17 @@ template <typename T>
 void f(T it) {
     typename T::value_type x;   // depends on T → compiler needs help
 }
+
+
+You said:
+{:5d} → Width 5, right-aligned
+
+{:05d} → Zero-pad (e.g., 00042)
+
+short res what's the difference? and show a short example of {:>5} → Right-align
+
+{:<5} → Left-align
+
+{:^5} → Center
+
+{:*^5} → Center, fill * short res

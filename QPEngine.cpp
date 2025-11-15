@@ -184,6 +184,7 @@ class QPEngine {
     void inline _printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept;
     void inline _printMatrix(const matrix_t& matrix) const noexcept;
     void inline _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
+    void inline _printBVector(const bVector_t& bVector) const noexcept;
 
 
     /**
@@ -192,8 +193,15 @@ class QPEngine {
      * @param coordinateList 
      * @return std::pair<Eigen::VectorXd, Eigen::VectorXd> 
      */
-    [[nodiscard]] std::pair<Eigen::VectorXd, Eigen::VectorXd> coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept;
+    [[nodiscard]] bVector_t coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept;
 
+    /**
+     * @brief Given a pair of vectors (bVector_t), converts it into a coordinateList
+     * 
+     * @param bVector 
+     * @return QPEngine::coordinateList_t 
+     */
+    [[nodiscard]] coordinateList_t vectorToCoordinateConversion(const bVector_t& bVector) const noexcept;
 
 
 
@@ -218,26 +226,14 @@ int main(int argc, char** argv) {
   }
 
   
-  Eigen::MatrixXf a(2, 2);
-  Eigen::VectorXf b(2);
-  b(0) = 3;
-  a(1, 0) = 2;
-
-  
   #ifdef DEBUG_PRINT
   spdlog::set_level(spdlog::level::debug);
   #else
   spdlog::set_level(spdlog::level::info);
   #endif
-  std::cout << "It is \n" << a << "\n and \n" << b << std::endl;
 
-  spdlog::debug("Matirx a:\n{}", a);
-  spdlog::debug("Vector b:\n{}", b);
 
   BREAKPOINT;
-
-
-  return 0;
 
   // cancel synch with cstdio
   std::ios_base::sync_with_stdio(false);
@@ -294,7 +290,7 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
   /* generate bVector */
   BREAKPOINT;
   bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
-  // DEBUG_PRINT_FUNC(bVector, _printCoordinateList);
+  DEBUG_PRINT_FUNC(bVector, _printBVector);
 
   BREAKPOINT;
 }
@@ -461,12 +457,10 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
 
   void inline QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept{
-    FOR_EACH(portToCoordinateMap, (
-      [](const auto& coordinate) {
-        std::cout << "(" << coordinate.first << "," << coordinate.second << ")\n";
-      }
-    ));
-  } // QPEngine::_printCoordinateList
+    for (const auto&[x, y]: portToCoordinateMap) {
+      spdlog::debug("({:.2f},{:.2f})", x, y);
+    }
+  } // QPEngine::_printCoordinateList()
 
   void inline QPEngine::_printMatrix(const matrix_t& matrix) const noexcept {
     FOR_EACH(matrix, (
@@ -495,7 +489,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::_printNetList()
 
 
-  [[nodiscard]] std::pair<Eigen::VectorXd, Eigen::VectorXd> QPEngine::coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
+  [[nodiscard]] QPEngine::bVector_t QPEngine::coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
   // NRVO constructs everything in place
   size_t vectorSize = _getNumCoordinates(coordinateList);
   Eigen::VectorXd b_x(vectorSize);
@@ -507,3 +501,22 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   }
   return std::pair{b_x, b_y};
 } // QPEngine::coordinateToVectorConversion()
+
+[[nodiscard]] QPEngine::coordinateList_t QPEngine::vectorToCoordinateConversion(const bVector_t& bVector) const noexcept {
+  // NRVO constructs everything in place
+  const auto& [b_x, b_y] = bVector;
+  assert(b_x.size() == b_y.size());
+  size_t vectorSize = b_x.size();
+  coordinateList_t coordinateList(vectorSize);
+  for (int i = 0; i < vectorSize; ++i) {
+    coordinateList[i].first = b_x(i);
+    coordinateList[i].second = b_y(i);
+  }
+  return coordinateList;
+} // QPEngine::vectorToCoordinateConversion()
+
+
+  void inline QPEngine::_printBVector(const bVector_t& bVector) const noexcept{
+    const coordinateList_t coordinateList = vectorToCoordinateConversion(bVector);
+    _printCoordinateList(coordinateList);
+  } // QPEngine::_printBVector()
