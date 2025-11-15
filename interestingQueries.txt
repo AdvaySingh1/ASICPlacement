@@ -227,3 +227,58 @@ Existing CMakeCache.txt
 Defaults in CMakeLists.txt
 
 So: CLI overrides presets, presets override -C, -C seeds the initial cache before CMakeCache.txt, and CMakeLists is last.
+
+
+When you run cmake -S . -B build --preset debug:
+
+It uses the configure preset named "debug"
+Build presets are used later with cmake --build build --preset debug
+The build preset references a configure preset because you must configure before you can build.
+The "configurePreset": "debug" tells CMake: "when using this build preset, make sure the project was configured with the debug configure preset."
+It's a consistency check - ensures you're building what you think you're building
+
+
+
+
+
+
+
+Spdlog:
+
+// If async logger:
+queue_.push(msg);  // Background thread writes to file
+```
+
+## Architecture:
+```
+┌─────────────────────────────────────────┐
+│         Your Code                       │
+│  spdlog::info("x={}", 42)              │
+└──────────────┬──────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────┐
+│         spdlog                          │
+│  - Check log level                     │
+│  - Add timestamp                       │
+│  - Add thread ID                       │
+│  - Format message with fmt: ────────┐  │
+└─────────────────────────────────────┼──┘
+                                      │
+                                      ▼
+                           ┌──────────────────┐
+                           │   fmt::format    │
+                           │  "x={}" + 42     │
+                           │  → "x=42"        │
+                           └────────┬─────────┘
+                                    │
+                                    ▼ (returns formatted string)
+┌─────────────────────────────────────────┐
+│         spdlog (continued)              │
+│  - Create full log line:               │
+│    "[2024-11-15 14:32:10] [info] x=42" │
+│  - Send to sinks:                      │
+│    ├─ Console sink → stdout            │
+│    ├─ File sink → app.log              │
+│    └─ Rotating file sink → app1.log    │
+└─────────────────────────────────────────┘

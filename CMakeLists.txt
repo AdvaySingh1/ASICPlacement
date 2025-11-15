@@ -8,10 +8,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include(FetchContent)
 
-# Load initial cache (sets defaults before first configure)
-if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/Cache.cmake)
-    include(${CMAKE_SOURCE_DIR}/cmake/Cache.cmake)
-endif()
+# Loadinitial cache(sets defaults before first configure)
+# if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/Cache.cmake)
+# include(${CMAKE_SOURCE_DIR}/cmake/Cache.cmake)
+# endif()
 
 # fetch spdlog
 find_package(spdlog NO_MODULE QUIET)
@@ -38,3 +38,8 @@ endif()
 
 add_executable(QPEngine QPEngine.cpp)
 target_link_libraries(QPEngine Eigen3::Eigen spdlog::spdlog)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # add_compile_definitions(DEBUG_PRINT DEBUG_BREAKPOINT)
+    target_compile_definitions(QPEngine PRIVATE DEBUG_PRINT DEBUG_BREAKPOINT)
+endif()
