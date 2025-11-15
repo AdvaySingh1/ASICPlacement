@@ -109,6 +109,7 @@ class QPEngine {
     /* private types */
     using coordinateList_t = std::vector<coordinate_t>;
     using netList_t = std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>>;
+    using bVector_t = std::pair<Eigen::VectorXd, Eigen::VectorXd>;
     /* helper functions */
     /**
      * @brief Read the netlist into netToGateAndPortListMap
@@ -156,7 +157,7 @@ class QPEngine {
      * @param portToCoordinateMap 
      * @return coordinateList_t 
      */
-    [[nodiscard]] coordinateList_t _createBVector(const netList_t& netToGateAndPortListMap, const coordinateList_t& portToCoordinateMap) const noexcept;
+    [[nodiscard]] bVector_t _createBVector(const netList_t& netToGateAndPortListMap, const coordinateList_t& portToCoordinateMap) const noexcept;
 
 
     /**
@@ -292,8 +293,8 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
 
   /* generate bVector */
   BREAKPOINT;
-  coordinateList_t b = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
-  DEBUG_PRINT_FUNC(b, _printCoordinateList);
+  bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
+  // DEBUG_PRINT_FUNC(bVector, _printCoordinateList);
 
   BREAKPOINT;
 }
@@ -423,29 +424,28 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
 
   // see where to throw the exceptions here
-  [[nodiscard]] typename QPEngine::coordinateList_t
+  [[nodiscard]] QPEngine::bVector_t
   QPEngine::_createBVector(const netList_t& netToGateAndPortListMap, const coordinateList_t& portToCoordinateMap) const noexcept {
     size_t numGates = _getNumGates(netToGateAndPortListMap);
     size_t numPorts = _getNumCoordinates(portToCoordinateMap);
-    coordinateList_t bVector(numGates, {0, 0});
-    for (int i = 0; i < numGates; ++i) {
-      // for each gate, determine the ports it's connected to
-      FOR_EACH(netToGateAndPortListMap, (
-        [&bVector, &portToCoordinateMap, i, numPorts](const auto& p){
-          if (p.first[i]) {
-            // net is connect to the gate
-            for (int j = 0; j < numPorts; ++j) {
-              if (p.second[j]) {
-                // net is connect to port
-                // append the coordinate * the weight of the wire (1) to this
-                bVector[i].first += portToCoordinateMap[i].first;
-                bVector[i].second += portToCoordinateMap[i].second;
-              }
+    Eigen::VectorXd b_x = Eigen::VectorXd::Zero(numGates);
+    Eigen::VectorXd b_y = Eigen::VectorXd::Zero(numGates);
+    for (int gate = 0; gate < numGates; ++gate) {
+      for (const auto &[netGates, netPorts]: netToGateAndPortListMap) {
+        if (netGates[gate]) {
+          // net is connect to the gate
+          for (int port = 0; port < numPorts; ++port) {
+            if (netPorts[port]) {
+              // net is connect to port
+              // append the coordinate * the weight (netPorts[port]) of the wire (1) to this
+              b_x(gate) += portToCoordinateMap[port].first;
+              b_y(gate) += portToCoordinateMap[port].second;
             }
           }
-        }));
+        }
+      }
     }
-    return bVector;
+    return std::pair{b_x, b_y};
   } // QPEngine::coordinateList_t()
 
 
