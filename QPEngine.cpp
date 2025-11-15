@@ -3,12 +3,12 @@
 #include <sstream>
 #include <iostream>
 #include <string>
-
+#include <numeric>
+#include <sstream>
 #include <Eigen/Dense>
 #include <spdlog/spdlog.h>
-
 #include <spdlog/fmt/fmt.h>
-#include <sstream>
+
 
 template<typename T>
 struct fmt::formatter<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>> {
@@ -134,9 +134,9 @@ class QPEngine {
      * specifed, hence, they are all 0
      * 
      * @param netToGateAndPortListMap 
-     * @return matrix_t 
+     * @return Eigen::MatrixXd 
      */
-    [[nodiscard]] matrix_t _createCMatrix(const netList_t& netToGateAndPortListMap) const noexcept;
+    [[nodiscard]] Eigen::MatrixXd _createCMatrix(const netList_t& netToGateAndPortListMap) const noexcept;
 
 
     /**
@@ -145,9 +145,9 @@ class QPEngine {
      * 
      * @param c 
      * @param netToGateAndPortListMap 
-     * @return matrix_t 
+     * @return Eigen::MatrixXd 
      */
-    [[nodiscard]] matrix_t _createAMatrix(const matrix_t& c, const netList_t& netToGateAndPortListMap) const;
+    [[nodiscard]] Eigen::MatrixXd _createAMatrix(const Eigen::MatrixXd& c, const netList_t& netToGateAndPortListMap) const;
 
     
     /**
@@ -155,7 +155,7 @@ class QPEngine {
      * 
      * @param netToGateAndPortListMap 
      * @param portToCoordinateMap 
-     * @return coordinateList_t 
+     * @return bVector_t 
      */
     [[nodiscard]] bVector_t _createBVector(const netList_t& netToGateAndPortListMap, const coordinateList_t& portToCoordinateMap) const noexcept;
 
@@ -279,13 +279,13 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
 
   /* generate cMatrix */
   BREAKPOINT;
-  matrix_t c = _createCMatrix(netToGateAndPortListMap);
-  DEBUG_PRINT_FUNC(c, _printMatrix);
+  Eigen::MatrixXd c = _createCMatrix(netToGateAndPortListMap);
+  // DEBUG_PRINT_FUNC(c, _printMatrix);
   
   /* generate aMatrix */
   BREAKPOINT;
-  matrix_t a = _createAMatrix(c, netToGateAndPortListMap);
-  DEBUG_PRINT_FUNC(a, _printMatrix);
+  Eigen::MatrixXd a = _createAMatrix(c, netToGateAndPortListMap);
+  // DEBUG_PRINT_FUNC(a, _printMatrix);
 
   /* generate bVector */
   BREAKPOINT;
@@ -360,57 +360,45 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   return netToGateAndPortListMap;
 } // QPEngine::readNetlist()
 
-[[nodiscard]] typename QPEngine::matrix_t QPEngine::_createCMatrix(const QPEngine::netList_t& netToGateAndPortListMap) const noexcept {
+[[nodiscard]] Eigen::MatrixXd QPEngine::_createCMatrix(const QPEngine::netList_t& netToGateAndPortListMap) const noexcept {
   size_t numGates = _getNumGates(netToGateAndPortListMap);
-  // create the cmatrix by determing where the connections exist
-  matrix_t c(numGates, vector_t(numGates, 0));
-  FOR_EACH(netToGateAndPortListMap,
-    [&c](auto& p) {
-      const auto& gates = p.first; 
-      for (size_t i = 0; i < gates.size(); ++i) {
-        for (size_t j = i+1; j < gates.size(); ++j) {
-          c[gates[i]][gates[j]] = c[gates[j]][gates[i]] = 1;
+  // create the cMatrix by determing where the connections exist
+  Eigen::MatrixXd c = Eigen::MatrixXd::Zero(numGates, numGates);
+  for (const auto &[netGates, _]: netToGateAndPortListMap) {
+      for (size_t i = 0; i < numGates; ++i) {
+        for (size_t j = i+1; j < numGates; ++j) {
+          c(i,j) = c(j,i) = static_cast<int>(netGates[i] && netGates[j]);
         }
       }
-    });
+    }
     return c;
   } // QPEngine::_createCMatrix()
   
   
-  [[nodiscard]] typename QPEngine::matrix_t 
-  QPEngine::_createAMatrix(const QPEngine::matrix_t& c, const QPEngine::netList_t& netToGateAndPortListMap) const {
+  [[nodiscard]] Eigen::MatrixXd 
+  QPEngine::_createAMatrix(const Eigen::MatrixXd& c, const QPEngine::netList_t& netToGateAndPortListMap) const {
     size_t numGates = _getNumGates(netToGateAndPortListMap);
-    if (numGates > c.size() || numGates > c[0].size()) throw std::runtime_error("Matrix c size too small");
-    matrix_t a(numGates, vector_t(numGates, 0));
+    if (numGates >= c.rows() || numGates > c.cols()) throw std::runtime_error("Matrix c size too small");
+    Eigen::MatrixXd a = Eigen::MatrixXd::Zero(numGates, numGates);
     for (size_t i = 0; i < numGates; ++i) {
       for (size_t j = 0; j < numGates; ++j) {
         if (i == j) {
           // in the diagonal, 
           // sum up the pad (port) wires
-          size_t portWireSum;
-          FOR_EACH(netToGateAndPortListMap, (
-            [&portWireSum, i](const auto& p){
-              if (p.first[i]) {
-                FOR_EACH(p.second, 
-                  [&portWireSum](const auto port) {
-                    if (port) ++portWireSum;
-                  }
-                );
-              }
-            })
-          );
+          size_t portWireSum = 0, cRowSum = 0;
+          for (const auto &[netGates, netPorts]: netToGateAndPortListMap) {
+            if (netGates[i]) {
+              // net is connect to the gate
+              portWireSum += std::accumulate(netPorts.begin(), netPorts.end(), 0);
+            }
+          }
           // sum up this row in the c matrix
-          // since this is a diagonal matrix, we can also
-          // sum up the row
-          size_t cRowSum;
-          FOR_EACH(c[i], 
-            ([&cRowSum, i, j](const auto val)
-            {cRowSum+=val;}));
-          // set the sumi
-          a[i][j] = portWireSum + cRowSum;
+          cRowSum = c.row(i).sum();
+          // set the sum
+          a(i,j) = portWireSum + cRowSum;
         } else {
           // not on the diagonal, m[i][j] = -c[i][j]
-          a[i][j] = -c[i][j];
+          a(i,j) = -c(i,j);
         }
       }
     }
