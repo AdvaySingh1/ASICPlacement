@@ -84,7 +84,7 @@ class QPEngine {
 
     /* public typdefs */
     using vector_t = std::vector<float>; 
-    using matrix_t = std::vector<vector_t>; 
+    using matrix_t = Eigen::MatrixXd; 
     using coordinate_t = std::pair<float, float>; 
 
     /**
@@ -98,12 +98,6 @@ class QPEngine {
      */
     void run(std::ifstream& inFile, std::ofstream& outFile);
 
-    /**
-     * @brief Prints the matrix
-     * 
-     * @param m 
-     */
-    static void printMatrix(const matrix_t& m);
 
     private:
     /* private types */
@@ -136,7 +130,7 @@ class QPEngine {
      * @param netToGateAndPortListMap 
      * @return Eigen::MatrixXd 
      */
-    [[nodiscard]] Eigen::MatrixXd _createCMatrix(const netList_t& netToGateAndPortListMap) const noexcept;
+    [[nodiscard]] matrix_t _createCMatrix(const netList_t& netToGateAndPortListMap) const noexcept;
 
 
     /**
@@ -145,9 +139,9 @@ class QPEngine {
      * 
      * @param c 
      * @param netToGateAndPortListMap 
-     * @return Eigen::MatrixXd 
+     * @return matrix_t 
      */
-    [[nodiscard]] Eigen::MatrixXd _createAMatrix(const Eigen::MatrixXd& c, const netList_t& netToGateAndPortListMap) const;
+    [[nodiscard]] matrix_t _createAMatrix(const matrix_t& c, const netList_t& netToGateAndPortListMap) const;
 
     
     /**
@@ -182,7 +176,7 @@ class QPEngine {
      * 
      */
     void inline _printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept;
-    void inline _printMatrix(const Eigen::MatrixXd& m) const noexcept;
+    void inline _printMatrix(const matrix_t& m) const noexcept;
     void inline _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
     void inline _printBVector(const bVector_t& bVector) const noexcept;
 
@@ -279,12 +273,12 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
 
   /* generate cMatrix */
   BREAKPOINT;
-  Eigen::MatrixXd c = _createCMatrix(netToGateAndPortListMap);
+  matrix_t c = _createCMatrix(netToGateAndPortListMap);
   DEBUG_PRINT_FUNC(c, _printMatrix);
   
   /* generate aMatrix */
   BREAKPOINT;
-  Eigen::MatrixXd a = _createAMatrix(c, netToGateAndPortListMap);
+  matrix_t a = _createAMatrix(c, netToGateAndPortListMap);
   DEBUG_PRINT_FUNC(a, _printMatrix);
 
   /* generate bVector */
@@ -360,10 +354,10 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   return netToGateAndPortListMap;
 } // QPEngine::readNetlist()
 
-[[nodiscard]] Eigen::MatrixXd QPEngine::_createCMatrix(const QPEngine::netList_t& netToGateAndPortListMap) const noexcept {
+[[nodiscard]] QPEngine::matrix_t QPEngine::_createCMatrix(const QPEngine::netList_t& netToGateAndPortListMap) const noexcept {
   size_t numGates = _getNumGates(netToGateAndPortListMap);
   // create the cMatrix by determing where the connections exist
-  Eigen::MatrixXd c = Eigen::MatrixXd::Zero(numGates, numGates);
+  matrix_t c = matrix_t::Zero(numGates, numGates);
   for (const auto &[netGates, _]: netToGateAndPortListMap) {
       for (size_t i = 0; i < numGates; ++i) {
         for (size_t j = i+1; j < numGates; ++j) {
@@ -375,11 +369,11 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::_createCMatrix()
   
   
-  [[nodiscard]] Eigen::MatrixXd 
-  QPEngine::_createAMatrix(const Eigen::MatrixXd& c, const QPEngine::netList_t& netToGateAndPortListMap) const {
+  [[nodiscard]] QPEngine::matrix_t 
+  QPEngine::_createAMatrix(const matrix_t& c, const QPEngine::netList_t& netToGateAndPortListMap) const {
     size_t numGates = _getNumGates(netToGateAndPortListMap);
     if (numGates >= c.rows() || numGates > c.cols()) throw std::runtime_error("Matrix c size too small");
-    Eigen::MatrixXd a = Eigen::MatrixXd::Zero(numGates, numGates);
+    matrix_t a = matrix_t::Zero(numGates, numGates);
     for (size_t i = 0; i < numGates; ++i) {
       for (size_t j = 0; j < numGates; ++j) {
         if (i == j) {
@@ -450,7 +444,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     }
   } // QPEngine::_printCoordinateList()
 
-  void inline QPEngine::_printMatrix(const Eigen::MatrixXd& m) const noexcept {
+  void inline QPEngine::_printMatrix(const matrix_t& m) const noexcept {
     /*
     deprecated
       Took in matrix_t for pretty printing
