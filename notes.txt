@@ -86,3 +86,12 @@ Handy lldb commands:
 | **Watch a variable**             | `watchpoint set variable <var>`      | `watch set var count`     |
 | **Show registers**               | `register read`                      | —                         |
 | **Quit LLDB**                    | `quit`                               | `q`                       |
+
+
+
+cmake --list-presets
+TO be more specific
+cmake --list-presets=configure  # Configure presets (default)
+cmake --list-presets=build      # Build presets
+cmake --list-presets=test       # Test presets
+cmake --list-presets=all        # All presets

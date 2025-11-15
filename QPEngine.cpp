@@ -5,6 +5,7 @@
 #include <string>
 
 #include <Eigen/Dense>
+#include <spdlog/spdlog.h>
 
 // breakpoint macro
 #ifdef DEBUG_BREAKPOINT
@@ -174,7 +175,28 @@ int main(int argc, char** argv) {
     std::cerr << "Error. Did not specify inFile and\
         outFile paths for the Netlist" << std::endl;
   }
+
+  
+  Eigen::MatrixXf a(2, 2);
+  Eigen::VectorXf b(2);
+  b(0) = 3;
+  a(1, 0) = 2;
+
+  
+  #ifdef DEBUG_PRINT
+  spdlog::set_level(spdlog::level::debug);
+  #else
+  spdlog::set_level(spdlog::level::info);
+  #endif
+  std::cout << "It is \n" << a << "\n and \n" << b << std::endl;
+
+  spdlog::debug("Matirx a: {}", 1);
+  spdlog::debug("Vector b: {}", 2);
+
   BREAKPOINT;
+
+
+  return 0;
 
   // cancel synch with cstdio
   std::ios_base::sync_with_stdio(false);
