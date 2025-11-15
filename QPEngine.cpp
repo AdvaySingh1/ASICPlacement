@@ -76,6 +76,7 @@ inline void DEBUG(Args&&...) {}
   std::for_each(container.begin(), container.end(), func)
 
 
+
 class QPEngine {
     public:
     QPEngine() noexcept = default;
@@ -172,7 +173,7 @@ class QPEngine {
      * @param portToCoordinateMap_ 
      * @return size_t 
      */
-    [[nodiscard]] size_t inline _getNumPorts(const coordinateList_t& portToCoordinateMap_) const noexcept;
+    [[nodiscard]] size_t inline _getNumCoordinates(const coordinateList_t& coordinateList) const noexcept;
 
 
     /**
@@ -182,6 +183,15 @@ class QPEngine {
     void inline _printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept;
     void inline _printMatrix(const matrix_t& matrix) const noexcept;
     void inline _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
+
+
+    /**
+     * @brief Given a coordinateList, converts it into a pair of vectors
+     * 
+     * @param coordinateList 
+     * @return std::pair<Eigen::VectorXd, Eigen::VectorXd> 
+     */
+    [[nodiscard]] std::pair<Eigen::VectorXd, Eigen::VectorXd> coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept;
 
 
 
@@ -416,7 +426,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   [[nodiscard]] typename QPEngine::coordinateList_t
   QPEngine::_createBVector(const netList_t& netToGateAndPortListMap, const coordinateList_t& portToCoordinateMap) const noexcept {
     size_t numGates = _getNumGates(netToGateAndPortListMap);
-    size_t numPorts = _getNumPorts(portToCoordinateMap);
+    size_t numPorts = _getNumCoordinates(portToCoordinateMap);
     coordinateList_t bVector(numGates, {0, 0});
     for (int i = 0; i < numGates; ++i) {
       // for each gate, determine the ports it's connected to
@@ -445,9 +455,9 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::_getNumGates()
 
 
-  [[nodiscard]] size_t inline QPEngine::_getNumPorts(const coordinateList_t& portToCoordinateMap_) const noexcept {
-    return portToCoordinateMap_.size();
-  } // QPEngine::_getNumPorts()
+  [[nodiscard]] size_t inline QPEngine::_getNumCoordinates(const coordinateList_t& coordinateList) const noexcept {
+    return coordinateList.size();
+  } // QPEngine::_getNumCoordinates()
 
 
   void inline QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept{
@@ -483,3 +493,17 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
       std::cout << std::endl;
     }
   } // QPEngine::_printNetList()
+
+
+  [[nodiscard]] std::pair<Eigen::VectorXd, Eigen::VectorXd> QPEngine::coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
+  // NRVO constructs everything in place
+  size_t vectorSize = _getNumCoordinates(coordinateList);
+  Eigen::VectorXd b_x(vectorSize);
+  Eigen::VectorXd b_y(vectorSize);
+  for (int i = 0; i < vectorSize; ++i) {
+    const auto &[x, y] = coordinateList[i];
+    b_x(i) = x;
+    b_y(i) = y;
+  }
+  return std::pair{b_x, b_y};
+} // QPEngine::coordinateToVectorConversion()
