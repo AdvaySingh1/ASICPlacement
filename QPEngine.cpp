@@ -182,7 +182,7 @@ class QPEngine {
      * 
      */
     void inline _printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept;
-    void inline _printMatrix(const matrix_t& matrix) const noexcept;
+    void inline _printMatrix(const Eigen::MatrixXd& m) const noexcept;
     void inline _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
     void inline _printBVector(const bVector_t& bVector) const noexcept;
 
@@ -280,12 +280,12 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
   /* generate cMatrix */
   BREAKPOINT;
   Eigen::MatrixXd c = _createCMatrix(netToGateAndPortListMap);
-  // DEBUG_PRINT_FUNC(c, _printMatrix);
+  DEBUG_PRINT_FUNC(c, _printMatrix);
   
   /* generate aMatrix */
   BREAKPOINT;
   Eigen::MatrixXd a = _createAMatrix(c, netToGateAndPortListMap);
-  // DEBUG_PRINT_FUNC(a, _printMatrix);
+  DEBUG_PRINT_FUNC(a, _printMatrix);
 
   /* generate bVector */
   BREAKPOINT;
@@ -450,18 +450,23 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     }
   } // QPEngine::_printCoordinateList()
 
-  void inline QPEngine::_printMatrix(const matrix_t& matrix) const noexcept {
-    FOR_EACH(matrix, (
-      [](const auto& row) {
-        std::cout << "[";
-        FOR_EACH(row, (
-          [](const auto val) {
-            std::cout << val << ",";
-          }
-        ));
-        std::cout << "]\n";
-      }
-    ));
+  void inline QPEngine::_printMatrix(const Eigen::MatrixXd& m) const noexcept {
+    /*
+    deprecated
+      Took in matrix_t for pretty printing
+    */
+    // FOR_EACH(matrix, (
+    //   [](const auto& row) {
+    //     std::cout << "[";
+    //     FOR_EACH(row, (
+    //       [](const auto val) {
+    //         std::cout << val << ",";
+    //       }
+    //     ));
+    //     std::cout << "]\n";
+    //   }
+    // ));
+    spdlog::debug("{}", m);
   } // QPEngine::_printMatrix()
 
   void inline QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
