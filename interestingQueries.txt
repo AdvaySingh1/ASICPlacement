@@ -282,3 +282,17 @@ queue_.push(msg);  // Background thread writes to file
 │    ├─ File sink → app.log              │
 │    └─ Rotating file sink → app1.log    │
 └─────────────────────────────────────────┘
+
+
+
+When is typename actually needed?
+Because typename is only required when the type depends on a template parameter and might not be a type without telling the compiler.
+
+When typename IS required
+
+Example with iterators:
+
+template <typename T>
+void f(T it) {
+    typename T::value_type x;   // depends on T → compiler needs help
+}
