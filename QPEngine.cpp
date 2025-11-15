@@ -7,6 +7,36 @@
 #include <Eigen/Dense>
 #include <spdlog/spdlog.h>
 
+#include <spdlog/fmt/fmt.h>
+#include <sstream>
+
+template<typename T>
+struct fmt::formatter<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    
+    template<typename FormatContext>
+    auto format(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& mat, FormatContext& ctx) const {
+        std::ostringstream oss;
+        oss << mat;  // Uses Eigen's operator
+        return fmt::format_to(ctx.out(), "{}", oss.str());
+    }
+};
+
+
+// For vectors (same thing)
+template<typename T>
+struct fmt::formatter<Eigen::Matrix<T, Eigen::Dynamic, 1>> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    
+    template<typename FormatContext>
+    auto format(const Eigen::Matrix<T, Eigen::Dynamic, 1>& vec, FormatContext& ctx) const {
+        std::ostringstream oss;
+        oss << vec;
+        return fmt::format_to(ctx.out(), "{}", oss.str());
+    }
+};
+
+
 // breakpoint macro
 #ifdef DEBUG_BREAKPOINT
   #if defined(_MSC_VER)
@@ -190,8 +220,8 @@ int main(int argc, char** argv) {
   #endif
   std::cout << "It is \n" << a << "\n and \n" << b << std::endl;
 
-  spdlog::debug("Matirx a: {}", 1);
-  spdlog::debug("Vector b: {}", 2);
+  spdlog::debug("Matirx a:\n{}", a);
+  spdlog::debug("Vector b:\n{}", b);
 
   BREAKPOINT;
 
@@ -274,6 +304,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
       {std::vector<size_t>(numGates, 0),
       std::vector<size_t>()}
     );
+
 
   // note: using the word port for pads
   std::string line;
