@@ -226,9 +226,6 @@ int main(int argc, char** argv) {
   spdlog::set_level(spdlog::level::info);
   #endif
 
-
-  BREAKPOINT;
-
   // cancel synch with cstdio
   std::ios_base::sync_with_stdio(false);
 
@@ -357,10 +354,14 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   size_t numGates = _getNumGates(netToGateAndPortListMap);
   // create the cMatrix by determing where the connections exist
   matrix_t c = matrix_t::Zero(numGates, numGates);
+  BREAKPOINT;
   for (const auto &[netGates, _]: netToGateAndPortListMap) {
       for (size_t i = 0; i < numGates; ++i) {
         for (size_t j = i+1; j < numGates; ++j) {
-          c(i,j) = c(j,i) = static_cast<int>(netGates[i] && netGates[j]);
+          if (static_cast<int>(netGates[i] && netGates[j])) {
+            c(i,j) = 1;
+            c(j,i) = 1;
+          }
         }
       }
     }
@@ -371,7 +372,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   [[nodiscard]] QPEngine::matrix_t 
   QPEngine::_createAMatrix(const matrix_t& c, const QPEngine::netList_t& netToGateAndPortListMap) const {
     size_t numGates = _getNumGates(netToGateAndPortListMap);
-    if (numGates >= c.rows() || numGates > c.cols()) throw std::runtime_error("Matrix c size too small");
+    if (numGates > c.rows() || numGates > c.cols()) throw std::runtime_error("Matrix c size too small");
     matrix_t a = matrix_t::Zero(numGates, numGates);
     for (size_t i = 0; i < numGates; ++i) {
       for (size_t j = 0; j < numGates; ++j) {
@@ -438,9 +439,9 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
 
   void inline QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept{
-    BREAKPOINT;
+    fmt::print("Printing coordinate list");
     for (const auto&[x, y]: portToCoordinateMap) {
-      spdlog::debug("({:.2f},{:.2f})", x, y);
+      fmt::print("({:.2f},{:.2f})\n", x, y);
     }
   } // QPEngine::_printCoordinateList()
 
@@ -460,7 +461,8 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     //     std::cout << "]\n";
     //   }
     // ));
-    spdlog::debug("{}", m);
+    fmt::print("Printing Matrix\n");
+    fmt::print("{}", m);
   } // QPEngine::_printMatrix()
 
   void inline QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
