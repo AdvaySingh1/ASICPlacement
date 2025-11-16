@@ -525,7 +525,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing assigned gates list\n");
     for (const auto& [i, pos] : assignedGates) {
       const auto& [x, y] = pos;
-      os << fmt::format("{:d} {:.9f} {:.9f}\n", i, x, y);
+      os << fmt::format("{:d} {:.9f} {:.9f}\n", i+1, x, y);
     }
   } // QPEngine::_printCoordinateList()
 
