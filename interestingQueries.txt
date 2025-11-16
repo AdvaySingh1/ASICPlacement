@@ -310,3 +310,34 @@ short res what's the difference? and show a short example of {:>5} → Right-ali
 {:^5} → Center
 
 {:*^5} → Center, fill * short res
+
+
+
+
+
+
+
+Debugger tips:
+(lldb) list -20
+   302    // and a vector for ports attached to it
+   303    netList_t netToGateAndPortListMap = netList_t(
+   304        numNets,
+   305        {std::vector<size_t>(numGates, 0),
+   306        std::vector<size_t>()}
+   307      );
+   308 
+   309 
+   310    // note: using the word port for pads
+   311    std::string line;
+   312    // start off reading gate-gate connections not gate-port
+   313    size_t readPorts = 0, numPorts;
+   314    while (getline(inFile, line)) {
+   315      std::istringstream ss(line);
+   316 
+   317      if (!readPorts) {
+   318        size_t gate, numTmpNets, net;
+   319        // reading a gate to gate connection
+   320        ss >> gate; --gate;
+   321        _checkBounds(gate, numGates, "Input gate greater than number of gates");
+(lldb) expr netToGateAndPortListMap.size()
+(std::vector<std

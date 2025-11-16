@@ -312,6 +312,10 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   // start off reading gate-gate connections not gate-port
   size_t readPorts = 0, numPorts;
   while (getline(inFile, line)) {
+    // need to skip the \r
+    if (line.find_first_not_of(" \r\t") == std::string::npos) {
+        continue;
+    }
     std::istringstream ss(line);
 
     if (!readPorts) {
@@ -320,9 +324,11 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
       ss >> gate; --gate;
       _checkBounds(gate, numGates, "Input gate greater than number of gates");
       // read port line
-      if (ss.eof()) {
+      // if (ss.eof()) {
+      if (!(ss >> numTmpNets)) {
         readPorts = true;
-        numPorts = gate;
+        // undo the -1 for indexing
+        numPorts = gate + 1;
 
         // reshape the netToGateAndPortListMap
         FOR_EACH(netToGateAndPortListMap, 
@@ -333,7 +339,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
         portToCoordinateMap_.reserve(numPorts);
         continue;
       }
-      ss >> numTmpNets; // not really needed?
+      // ss >> numTmpNets; // not really needed?
       // insert net gate mapping into netToGateListMap
       while (ss >> net) {
         --net;
@@ -345,8 +351,8 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
       size_t port, net, x, y;
       // reading a port to gate connection
       ss >> port >> net >> x >> y;
-      _checkBounds(port, numPorts, "Input port greater than number of ports");
-      _checkBounds(net, numNets, "Input net greater than number of nets");
+      _checkBounds((--port), numPorts, "Input port greater than number of ports");
+      _checkBounds((--net), numNets, "Input net greater than number of nets");
       netToGateAndPortListMap[net].second[port] = 1;
       portToCoordinateMap_[port] = std::make_pair(x, y);
     }
@@ -465,13 +471,13 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
   void inline QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
     for (int net = 0; net < netToGateAndPortListMap.size(); ++net) {
-      std::cout << "Net: " << net << std::endl;
-      auto &[gates, ports] = netToGateAndPortListMap[net];
-      std::cout << "\tGates:";
-      FOR_EACH(gates, ([](const auto gate){std::cout << gate << ",";}));
-      std::cout << "\n\tPorts:";
-      FOR_EACH(ports, ([](const auto port){std::cout << port << ",";}));
-      std::cout << std::endl;
+      size_t i = 0;
+      fmt::print("Net: {:d}\n\tGates:", (net+1));
+      FOR_EACH(netToGateAndPortListMap[net].first, ([&i](const auto gate){++i; if(static_cast<bool>(gate)){fmt::print("{:d},", i);}}));
+      fmt::print("\n\tPorts:");
+      i = 0;
+      FOR_EACH(netToGateAndPortListMap[net].second, ([&i](const auto port){++i; if(static_cast<bool>(port)) { fmt::print("{:d},", i);}}));
+      fmt::print("\n");
     }
   } // QPEngine::_printNetList()
 
