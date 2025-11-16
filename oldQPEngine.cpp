@@ -1,10 +1,3 @@
-/*
-
-  Note:
-    The matrix and vectors in this implementation are very very sparse.
-*/
-
-
 #include <vector>
 #include <fstream>
 #include <sstream>
@@ -12,7 +5,6 @@
 #include <string>
 #include <numeric>
 #include <sstream>
-#include <unordered_map>
 #include <Eigen/Dense>
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/fmt.h>
@@ -109,7 +101,7 @@ class QPEngine {
 
     private:
     /* private types */
-    using coordinateList_t = std::unordered_map<std::pair<size_t, coordinate_t>>;
+    using coordinateList_t = std::vector<coordinate_t>;
     // note that the size_t is the index of the gate and not the gate number
     using assignedGate_t = std::vector<std::pair<size_t, coordinate_t>>;
     using netList_t = std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>>;
@@ -194,11 +186,11 @@ class QPEngine {
      * @brief Print helper functions
      * 
      */
-    inline void _printCoordinateList(const coordinateList_t& coordinateList, std::ostream& os = std::cout) const noexcept;
+    inline void _printCoordinateList(const coordinateList_t& portToCoordinateMap, std::ostream& os = std::cout) const noexcept;
     inline void _printMatrix(const matrix_t& m) const noexcept;
     inline void _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
     inline void _printBVector(const bVector_t& bVector) const noexcept;
-    inline void _printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os = std::cout) const noexcept;
+    inline void _printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os) const noexcept;
 
 
     /**
@@ -263,8 +255,7 @@ class QPEngine {
     // port to coordinate map for the external ports
     coordinateList_t portToCoordinateMap_ = coordinateList_t();
     // number of recursions which the placer does
-    int recCount_ = 0; // TODO
-    int numGates_ = 0;
+    int recCount_ = 0;
 
 }; // QPEngine
 
@@ -371,8 +362,8 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
 
 typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   // read num gates and nets
-  size_t numNets;
-  inFile >> numGates_ >> numNets;
+  size_t numGates, numNets;
+  inFile >> numGates >> numNets;
 
   netList_t netToGateAndPortListMap = netList_t(
       numNets,
@@ -409,8 +400,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
             p.second.resize(numPorts, 0);
           });
         // reshape the portToCoordinateMap
-        /* deprecated. Originally was a vector */
-        // portToCoordinateMap_.resize(numPorts);
+        portToCoordinateMap_.resize(numPorts);
         continue;
       }
       // ss >> numTmpNets; // not really needed?
@@ -487,10 +477,11 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   // see where to throw the exceptions here
   [[nodiscard]] QPEngine::bVector_t
   QPEngine::_createBVector(const netList_t& netToGateAndPortListMap, const coordinateList_t& portToCoordinateMap) const noexcept {
+    size_t numGates = _getNumGates(netToGateAndPortListMap);
     size_t numPorts = _getNumCoordinates(portToCoordinateMap);
     Eigen::VectorXd b_x = Eigen::VectorXd::Zero(numGates);
     Eigen::VectorXd b_y = Eigen::VectorXd::Zero(numGates);
-    for (int gate = 0; gate < numGates_; ++gate) {
+    for (int gate = 0; gate < numGates; ++gate) {
       for (const auto &[netGates, netPorts]: netToGateAndPortListMap) {
         if (netGates[gate]) {
           // net is connect to the gate
@@ -520,24 +511,23 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::_getNumCoordinates()
 
 
-  inline void QPEngine::_printCoordinateList(const coordinateList_t& coordinateList, std::ostream& os) const noexcept{
+  inline void QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap, std::ostream& os) const noexcept{
     // only print this if debug mode
-    DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing assigned gates list\n");
-    for (const auto& [index, pos]: coordinateList) {
-      const auto& [x, y] = pos;
-      os << fmt::format("{:d} {:.9f} {:.9f}\n", i+1, x, y);
+    DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing coordinate list\n");
+    size_t i = 0;
+    for (const auto&[x, y]: portToCoordinateMap) {
+      os << fmt::format("{:d} {:.9f} {:.9f}\n", ++i, x, y);
     }
   } // QPEngine::_printCoordinateList()
 
-
-  inline void QPEngine::_printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os) const noexcept{
+    inline void QPEngine::_printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os) const noexcept{
     // only print this if debug mode
     DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing assigned gates list\n");
     for (const auto& [i, pos] : assignedGates) {
       const auto& [x, y] = pos;
       os << fmt::format("{:d} {:.9f} {:.9f}\n", i+1, x, y);
     }
-  } // QPEngine::_printAssignedGates()
+  } // QPEngine::_printCoordinateList()
 
   inline void QPEngine::_printMatrix(const matrix_t& m) const noexcept {
     /*
@@ -574,10 +564,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
   [[nodiscard]] QPEngine::bVector_t QPEngine::_coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
   // NRVO constructs everything in place
-  // Note that the vector must always be the size of the whole matrix
-  // in order to keep track of the indecies. This leads to some pretty
-  // sparse vectors
-  size_t vectorSize = numGates_;
+  size_t vectorSize = _getNumCoordinates(coordinateList);
   Eigen::VectorXd b_x(vectorSize);
   Eigen::VectorXd b_y(vectorSize);
   for (int i = 0; i < vectorSize; ++i) {
@@ -595,7 +582,8 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   size_t vectorSize = b_x.size();
   coordinateList_t coordinateList(vectorSize);
   for (int i = 0; i < vectorSize; ++i) {
-    coordinateList[i] = std::pair(b_x(i), b_y(i));
+    coordinateList[i].first = b_x(i);
+    coordinateList[i].second = b_y(i);
   }
   return coordinateList;
 } // QPEngine::_vectorToCoordinateConversion()
