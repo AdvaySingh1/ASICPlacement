@@ -198,6 +198,17 @@ class QPEngine {
     [[nodiscard]] coordinateList_t vectorToCoordinateConversion(const bVector_t& bVector) const noexcept;
 
 
+    /**
+     * @brief Gicen a matrix_t m and bVector_t b (with b_x and b_y), solves for the
+     * coordinates of all of the gates in the matrix
+     * 
+     * @param m 
+     * @param bVector 
+     * @return coordinateList_t 
+     */
+    [[nodiscard]] coordinateList_t generatePlacements(const matrix_t& m, const bVector_t& bVector) const;
+
+
 
     /* member variables */
 
@@ -282,6 +293,11 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
   BREAKPOINT;
   bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
   DEBUG_PRINT_FUNC(bVector, _printBVector);
+  
+  /* generate placements */
+  BREAKPOINT;
+  coordinateList_t placements = generatePlacements(a, bVector);
+  DEBUG_PRINT_FUNC(placements, _printCoordinateList);
 
   BREAKPOINT;
 }
@@ -354,7 +370,6 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   size_t numGates = _getNumGates(netToGateAndPortListMap);
   // create the cMatrix by determing where the connections exist
   matrix_t c = matrix_t::Zero(numGates, numGates);
-  BREAKPOINT;
   for (const auto &[netGates, _]: netToGateAndPortListMap) {
       for (size_t i = 0; i < numGates; ++i) {
         for (size_t j = i+1; j < numGates; ++j) {
@@ -462,7 +477,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     //   }
     // ));
     fmt::print("Printing Matrix\n");
-    fmt::print("{}", m);
+    fmt::print("{}\n", m);
   } // QPEngine::_printMatrix()
 
   void inline QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
@@ -494,7 +509,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 [[nodiscard]] QPEngine::coordinateList_t QPEngine::vectorToCoordinateConversion(const bVector_t& bVector) const noexcept {
   // NRVO constructs everything in place
   const auto& [b_x, b_y] = bVector;
-  assert(b_x.size() == b_y.size());
+  assert(b_x.size() == b_y.size()); // TODO: check
   size_t vectorSize = b_x.size();
   coordinateList_t coordinateList(vectorSize);
   for (int i = 0; i < vectorSize; ++i) {
@@ -509,3 +524,17 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     const coordinateList_t coordinateList = vectorToCoordinateConversion(bVector);
     _printCoordinateList(coordinateList);
   } // QPEngine::_printBVector()
+
+
+  [[nodiscard]] QPEngine::coordinateList_t QPEngine::generatePlacements(const matrix_t& m, const bVector_t& bVector) const {
+    const auto& [b_x, b_y] = bVector;
+    // bounds check
+    if ((b_x.size() != b_y.size()) || (b_x.size() != m.rows()) || (m.rows() != m.cols())) {
+      BREAKPOINT;
+      throw std::runtime_error("Invalid matrix or bvector dimensions for QR decomposition");
+    }
+    Eigen::VectorXd placement_x = m.colPivHouseholderQr().solve(b_x);
+    Eigen::VectorXd placement_y = m.colPivHouseholderQr().solve(b_y);
+
+    return vectorToCoordinateConversion(std::pair(placement_x, placement_y));
+  } // QPEngine::placements()
