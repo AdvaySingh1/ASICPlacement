@@ -120,7 +120,7 @@ class QPEngine {
      * @param bound 
      * @param msg 
      */
-    void inline _checkBounds(const size_t val, const size_t bound, const std::string& msg) const;
+    inline void _checkBounds(const size_t val, const size_t bound, const std::string& msg) const;
 
     /**
      * @brief Given a netList_t map, creates a thing cMatrix
@@ -175,10 +175,10 @@ class QPEngine {
      * @brief Print helper functions
      * 
      */
-    void inline _printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept;
-    void inline _printMatrix(const matrix_t& m) const noexcept;
-    void inline _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
-    void inline _printBVector(const bVector_t& bVector) const noexcept;
+    inline void _printCoordinateList(const coordinateList_t& portToCoordinateMap, std::ostream& os = std::cout) const noexcept;
+    inline void _printMatrix(const matrix_t& m) const noexcept;
+    inline void _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
+    inline void _printBVector(const bVector_t& bVector) const noexcept;
 
 
     /**
@@ -298,6 +298,11 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
   BREAKPOINT;
   coordinateList_t placements = generatePlacements(a, bVector);
   DEBUG_PRINT_FUNC(placements, _printCoordinateList);
+
+
+  #ifndef DEBUG_PRINT
+    _printCoordinateList(placements, outFile);
+  #endif
 
   BREAKPOINT;
 }
@@ -453,14 +458,16 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::_getNumCoordinates()
 
 
-  void inline QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept{
-    fmt::print("Printing coordinate list");
+  inline void QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap, std::ostream& os) const noexcept{
+    // only print this if debug mode
+    DEBUG_PRINT_FUNC("Printing coordinate list", [](const std::string& s) {fmt::print("Printing coordinate list\n");});
+    size_t i = 0;
     for (const auto&[x, y]: portToCoordinateMap) {
-      fmt::print("({:.2f},{:.2f})\n", x, y);
+      os << fmt::format("{:d} {:.9f} {:.9f}\n", ++i, x, y);
     }
   } // QPEngine::_printCoordinateList()
 
-  void inline QPEngine::_printMatrix(const matrix_t& m) const noexcept {
+  inline void QPEngine::_printMatrix(const matrix_t& m) const noexcept {
     /*
     deprecated
       Took in matrix_t for pretty printing
@@ -480,7 +487,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     fmt::print("{}\n", m);
   } // QPEngine::_printMatrix()
 
-  void inline QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
+  inline void QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
     for (int net = 0; net < netToGateAndPortListMap.size(); ++net) {
       size_t i = 0;
       fmt::print("Net: {:d}\n\tGates:", (net+1));
@@ -520,7 +527,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 } // QPEngine::vectorToCoordinateConversion()
 
 
-  void inline QPEngine::_printBVector(const bVector_t& bVector) const noexcept{
+  inline void QPEngine::_printBVector(const bVector_t& bVector) const noexcept{
     const coordinateList_t coordinateList = vectorToCoordinateConversion(bVector);
     _printCoordinateList(coordinateList);
   } // QPEngine::_printBVector()
