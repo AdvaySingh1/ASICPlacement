@@ -41,6 +41,7 @@ target_link_libraries(QPEngine Eigen3::Eigen spdlog::spdlog)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     # add_compile_definitions(DEBUG_PRINT DEBUG_BREAKPOINT)
-    # target_compile_definitions(QPEngine PRIVATE DEBUG_PRINT DEBUG_BREAKPOINT)
-    target_compile_definitions(QPEngine PRIVATE DEBUG_PRINT)
+    target_compile_definitions(QPEngine PRIVATE DEBUG_PRINT DEBUG_BREAKPOINT)
+
+    # target_compile_definitions(QPEngine PRIVATE DEBUG_PRINT)
 endif()

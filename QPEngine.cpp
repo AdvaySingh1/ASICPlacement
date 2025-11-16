@@ -294,18 +294,11 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   size_t numGates, numNets;
   inFile >> numGates >> numNets;
 
-  // init numGates * numGates matrix all to 0
-  // cMatrix = matrix_t(numGates, std::vector<size_t>(numGates, 0));
-
-  // init an unordered map
-  // key: net, value: pair with a vector for gates attached to it
-  // and a vector for ports attached to it
   netList_t netToGateAndPortListMap = netList_t(
       numNets,
       {std::vector<size_t>(numGates, 0),
       std::vector<size_t>()}
     );
-
 
   // note: using the word port for pads
   std::string line;
@@ -336,7 +329,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
             p.second.resize(numPorts, 0);
           });
         // reshape the portToCoordinateMap
-        portToCoordinateMap_.reserve(numPorts);
+        portToCoordinateMap_.resize(numPorts);
         continue;
       }
       // ss >> numTmpNets; // not really needed?
@@ -445,6 +438,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
 
   void inline QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap) const noexcept{
+    BREAKPOINT;
     for (const auto&[x, y]: portToCoordinateMap) {
       spdlog::debug("({:.2f},{:.2f})", x, y);
     }
