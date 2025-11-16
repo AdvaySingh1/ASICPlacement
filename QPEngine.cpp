@@ -263,7 +263,7 @@ class QPEngine {
     // port to coordinate map for the external ports
     coordinateList_t portToCoordinateMap_ = coordinateList_t();
     // number of recursions which the placer does
-    int recCount_ = 0; // TODO
+    int numPartitions_ = 0;
     int numGates_ = 0;
 
 }; // QPEngine
@@ -657,10 +657,92 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
       _PartitionAndPlace(new_x, new_y, new_pads, new_NetList, not_split)
     }
   
-    generate placements(NetList, pads) {
-      create cMatrix
-      create aMatrix
-      create bVector
-    }
+
+
+    Solution to the aforementioned issue of sparcity:
+
+    Things which stay constant throughout:
+      - The gate mappings.
+        Even though there are some arbitrary ones, it's fine since
+        those won't be indexed while making the cMatrix or the aMatrix
+      - numPartitions_ can be decreased by one recursion and set during run
+
+
+    Things which depend on the current iteration:
+        - The portNetLists.
+      - input gateCoordinateList (initially start off arbitrary)
+      - input portCoordinateList
+      - input dimension (need a structure for this (left, right, top, bottom))
+      - input previous partition
+
+
+    API changes:
+      - Size for bVector, cMatrix, and aMatrix depends on coordinateList size
+      - _createCMatrix needs to include the coordinateList as an argument
+      - When the resulting solution is sorted, it needs to be indexed by the
+        input gate coordinateList
+      - _generatePlacements needs to take in coordinateList
+      - _assignBlocks returns a coordinateList now sorted
+
+
+      At the end, return a 
+
+      psuedocode:
+
+      globally:
+        numPartition_;
+        gateNetList_;
+
+      coordinateList _generatePlacements(gateCoordinateList, portCoordinateList, portNetList) {
+        create cMatrix(gateCoordinateList); 
+        create aMatrix(gateCoordinateList, portNetList);
+        create bVector(gateCoordinateList, portCoordinateList, portNetList);
+      }
+      
+      _place(gateCoordinateList, portCoordinateList, portNetList, dimension, partition) {
+        if (!numPartition_--) return portCoordinateList;
+
+        // determine new dimensions
+        firstDimension = _firstDimension(dimension, partition);
+        secondDimension = _secondDimension(dimension, partition);
+
+        // assign gateCoordinateList
+        assignedGateCoordinateList = _assignBlocks(gateCoordinateList);
+
+        // generate sub-gateCoordinateList
+        firstGateCoordinateList = _firstHalf(assignedGateCoordinateList);
+        secondGateCoordinateList = _secondHalf(assignedGateCoordinateList);
+
+        // generate netlists (don't need any placements before this)
+        firstPortNetList = _generateNetlist(firstGateCoordinateList, secondGateCoordinateList, portNetList);
+        secondPortNetList = _generateNetlist(firstGateCoordinateList, firstGateCoordinateList, portNetList); // doesn't need to be placed here
+
+        // place first
+        firstPortCoordinateList = _propagatePads(secondGateCoordinateList, portCoordinateList, firstDimension);
+        placedFirstGateCoordinateList = _generatePlacements(firstGateCoordinateList, firstPortCoordinateList, firstPortNetList);
+
+        // place second
+        secondPortCoordinateList = _propagatePads(placedFirstGateCoordinateList, portCoordinateList, secondDimension);
+        placedSecondGateCoordinateList = _generatePlacements(secondGateCoordinateList, secondPortCoordinateList, secondPortNetList);
+
+        merge the placed gateCooordinateLists and return
+        placedFirstGateCoordinateList = _place(placedFirstGateCoordinateList, firstPortCoordinateList, firstPortNetList, firstDimension, notPartition);
+        placedSecondGateCoordinateList = _place(placedSecondGateCoordinateList, secondPortCoordinateList, secondPortNetList, secondDimension, notPartition);
+        return merge(placedFirstGateCoordinateList, placedSecondGateCoordinateList); 
+      }
+
+      place(inFile outFile) {
+        read inFile(generate gateNetList_, portCoordinateList, and portNetList);
+        zero initialize(gateCoordinateList);
+        placedGateCoordinateList = _generatePlacements(gateCoordinateList, portCoordinateList, portNetList);
+        init dimension;
+        init partition;
+
+        return _place(placedGateCoordinateList, portCoordinateList, portNetList, dimension, partition);
+      }
+
+
+
+      
   */
 
