@@ -66,9 +66,9 @@ inline void DEBUG(Args&&...) {}
 
 
 #ifdef DEBUG_PRINT
-  #define DEBUG_PRINT_FUNC(container, func) func(container) 
+  #define DEBUG_PRINT_FUNC(func, ...) func(__VA_ARGS__) 
 #else
-  #define DEBUG_PRINT_FUNC(container, func) ((void)0)
+  #define DEBUG_PRINT_FUNC(func, ...) ((void)0)
 #endif
 
 
@@ -102,12 +102,18 @@ class QPEngine {
     private:
     /* private types */
     using coordinateList_t = std::vector<coordinate_t>;
+    // note that the size_t is the index of the gate and not the gate number
+    using assignedGate_t = std::vector<std::pair<size_t, coordinate_t>>;
     using netList_t = std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>>;
     using bVector_t = std::pair<Eigen::VectorXd, Eigen::VectorXd>;
 
     enum class partition_t: uint8_t {
       horizontal,
       vertical
+    };
+    enum class side_t: uint8_t {
+      first,
+      second
     };
     /* helper functions */
     /**
@@ -184,6 +190,7 @@ class QPEngine {
     inline void _printMatrix(const matrix_t& m) const noexcept;
     inline void _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
     inline void _printBVector(const bVector_t& bVector) const noexcept;
+    inline void _printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os) const noexcept;
 
 
     /**
@@ -214,7 +221,27 @@ class QPEngine {
     [[nodiscard]] coordinateList_t _generatePlacements(const matrix_t& m, const bVector_t& bVector) const;
 
 
-    void _sortCoordinates(const partition_t p, coordinateList_t& coordinates) const noexcept;
+    /**
+     * @brief Sorts the coordinates for the assignment step
+     * 
+     * @param p 
+     * @param coordinates 
+     */
+    assignedGate_t _assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept;
+
+    /**
+     * @brief Propagates the pads based on the side and the edge
+     * In the case of an odd number of coordinates, one more of them are assigned
+     * to the second side than the first
+     * 
+     * 
+     * @param side 
+     * @param coordinates 
+     * @param edge 
+     */
+    // coordinateList_t _propagatePads(const side_t side, const coordinateList_t& coordinates, const coordinate_t& edge) const noexcept;
+
+
 
 
   
@@ -288,43 +315,43 @@ void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
   BREAKPOINT;
   spdlog::debug("Reading Nelist");
   netList_t netToGateAndPortListMap = _readNetlist(inFile);
-  DEBUG_PRINT_FUNC(netToGateAndPortListMap, _printNetList);
-  DEBUG_PRINT_FUNC(portToCoordinateMap_, _printCoordinateList);
+  DEBUG_PRINT_FUNC(_printNetList, netToGateAndPortListMap);
+  DEBUG_PRINT_FUNC(_printCoordinateList, portToCoordinateMap_);
 
   /* generate cMatrix */
   BREAKPOINT;
   spdlog::debug("Creating cMatrix");
   matrix_t c = _createCMatrix(netToGateAndPortListMap);
-  DEBUG_PRINT_FUNC(c, _printMatrix);
+  DEBUG_PRINT_FUNC(_printMatrix, c);
   
   /* generate aMatrix */
   BREAKPOINT;
   spdlog::debug("Creating aMatrix");
   matrix_t a = _createAMatrix(c, netToGateAndPortListMap);
-  DEBUG_PRINT_FUNC(a, _printMatrix);
+  DEBUG_PRINT_FUNC(_printMatrix, a);
 
   /* generate bVector */
   BREAKPOINT;
   spdlog::debug("Creating BVector");
   bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
-  DEBUG_PRINT_FUNC(bVector, _printBVector);
+  DEBUG_PRINT_FUNC(_printBVector, bVector);
   
   /* generate placements */
   BREAKPOINT;
   spdlog::debug("Generating Placements");
   coordinateList_t placements = _generatePlacements(a, bVector);
-  DEBUG_PRINT_FUNC(placements, _printCoordinateList);
+  DEBUG_PRINT_FUNC(_printCoordinateList, placements);
 
   /* partition */
   BREAKPOINT;
   spdlog::debug("Vertical Partition");
-  _sortCoordinates(partition_t::vertical, placements);
-  DEBUG_PRINT_FUNC(placements, _printCoordinateList);
+  assignedGate_t assignedGates = _assignBlocks(partition_t::vertical, placements);
+  DEBUG_PRINT_FUNC(_printAssignedGates, assignedGates, std::cout);
 
   BREAKPOINT;
   spdlog::debug("Horizontal Partition");
-  _sortCoordinates(partition_t::horizontal, placements);
-  DEBUG_PRINT_FUNC(placements, _printCoordinateList);
+  assignedGate_t assignedGatesH = _assignBlocks(partition_t::horizontal, placements);
+  DEBUG_PRINT_FUNC(_printAssignedGates, assignedGatesH, std::cout);
 
   #ifndef DEBUG_PRINT
     _printCoordinateList(placements, outFile);
@@ -486,10 +513,19 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
 
   inline void QPEngine::_printCoordinateList(const coordinateList_t& portToCoordinateMap, std::ostream& os) const noexcept{
     // only print this if debug mode
-    DEBUG_PRINT_FUNC("Printing coordinate list", [](const std::string& s) {fmt::print("Printing coordinate list\n");});
+    DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing coordinate list\n");
     size_t i = 0;
     for (const auto&[x, y]: portToCoordinateMap) {
       os << fmt::format("{:d} {:.9f} {:.9f}\n", ++i, x, y);
+    }
+  } // QPEngine::_printCoordinateList()
+
+    inline void QPEngine::_printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os) const noexcept{
+    // only print this if debug mode
+    DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing assigned gates list\n");
+    for (const auto& [i, pos] : assignedGates) {
+      const auto& [x, y] = pos;
+      os << fmt::format("{:d} {:.9f} {:.9f}\n", i, x, y);
     }
   } // QPEngine::_printCoordinateList()
 
@@ -573,14 +609,46 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::placements()
 
 
-  void QPEngine::_sortCoordinates(const partition_t p, coordinateList_t& coordinates) const noexcept {
-    std::sort(coordinates.begin(), coordinates.end(), 
+  QPEngine::assignedGate_t QPEngine::_assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept {
+    assignedGate_t assignedGates(coordinates.size()); size_t i = 0;
+    std::transform(coordinates.begin(), coordinates.end(), assignedGates.begin(),
+    [&i](const auto& coordinate) { return std::pair(i++, coordinate); });
+    std::sort(assignedGates.begin(), assignedGates.end(), 
       [p](const auto& a, const auto& b) {
-        const auto& [a_x, a_y] = a;
-        const auto& [b_x, b_y] = b;
+        const auto& [index_a, pos_a] = a;
+        const auto& [a_x, a_y] = pos_a;
+        const auto& [index_b, pos_b] = b;
+        const auto& [b_x, b_y] = pos_b;
         return (p == partition_t::horizontal) ?
           (a_y == b_y ? a_x < b_x : a_y < b_y) :
           (a_x == b_x ? a_y < b_y : a_x < b_x);
       }
     );
-  }
+    return assignedGates;
+  } // QPEngine::_assignBlocks()
+
+
+
+  /*
+    Main recursion loop
+    _PartitionAndPlace(x, y, pads, NetList, split, recur_depth) {
+      if (!recur_depth) return;
+      generate placements()
+      assign placements(split)
+      propagate pads(left or top)
+      generate NetList(left or top)
+      generate placements(left or top)
+      propagate pads(right or bottom)
+      generate NetList(right or bottom)
+      generate placements(right or bottom)
+      _PartitionAndPlace(new_x, new_y, new_pads, new_NetList, not_split)
+      _PartitionAndPlace(new_x, new_y, new_pads, new_NetList, not_split)
+    }
+  
+    generate placements(NetList, pads) {
+      create cMatrix
+      create aMatrix
+      create bVector
+    }
+  */
+
