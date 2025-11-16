@@ -104,6 +104,11 @@ class QPEngine {
     using coordinateList_t = std::vector<coordinate_t>;
     using netList_t = std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>>;
     using bVector_t = std::pair<Eigen::VectorXd, Eigen::VectorXd>;
+
+    enum class partition_t: uint8_t {
+      horizontal,
+      vertical
+    };
     /* helper functions */
     /**
      * @brief Read the netlist into netToGateAndPortListMap
@@ -187,7 +192,7 @@ class QPEngine {
      * @param coordinateList 
      * @return std::pair<Eigen::VectorXd, Eigen::VectorXd> 
      */
-    [[nodiscard]] bVector_t coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept;
+    [[nodiscard]] bVector_t _coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept;
 
     /**
      * @brief Given a pair of vectors (bVector_t), converts it into a coordinateList
@@ -195,7 +200,7 @@ class QPEngine {
      * @param bVector 
      * @return QPEngine::coordinateList_t 
      */
-    [[nodiscard]] coordinateList_t vectorToCoordinateConversion(const bVector_t& bVector) const noexcept;
+    [[nodiscard]] coordinateList_t _vectorToCoordinateConversion(const bVector_t& bVector) const noexcept;
 
 
     /**
@@ -206,7 +211,13 @@ class QPEngine {
      * @param bVector 
      * @return coordinateList_t 
      */
-    [[nodiscard]] coordinateList_t generatePlacements(const matrix_t& m, const bVector_t& bVector) const;
+    [[nodiscard]] coordinateList_t _generatePlacements(const matrix_t& m, const bVector_t& bVector) const;
+
+
+    void _sortCoordinates(const partition_t p, coordinateList_t& coordinates) const noexcept;
+
+
+  
 
 
 
@@ -275,30 +286,45 @@ void QPEngine::_checkBounds(const size_t val, const size_t bound, const std::str
 void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
   /* read the input file and generate netlist and gloabl portToCoordinateMap_*/
   BREAKPOINT;
+  spdlog::debug("Reading Nelist");
   netList_t netToGateAndPortListMap = _readNetlist(inFile);
   DEBUG_PRINT_FUNC(netToGateAndPortListMap, _printNetList);
   DEBUG_PRINT_FUNC(portToCoordinateMap_, _printCoordinateList);
 
   /* generate cMatrix */
   BREAKPOINT;
+  spdlog::debug("Creating cMatrix");
   matrix_t c = _createCMatrix(netToGateAndPortListMap);
   DEBUG_PRINT_FUNC(c, _printMatrix);
   
   /* generate aMatrix */
   BREAKPOINT;
+  spdlog::debug("Creating aMatrix");
   matrix_t a = _createAMatrix(c, netToGateAndPortListMap);
   DEBUG_PRINT_FUNC(a, _printMatrix);
 
   /* generate bVector */
   BREAKPOINT;
+  spdlog::debug("Creating BVector");
   bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
   DEBUG_PRINT_FUNC(bVector, _printBVector);
   
   /* generate placements */
   BREAKPOINT;
-  coordinateList_t placements = generatePlacements(a, bVector);
+  spdlog::debug("Generating Placements");
+  coordinateList_t placements = _generatePlacements(a, bVector);
   DEBUG_PRINT_FUNC(placements, _printCoordinateList);
 
+  /* partition */
+  BREAKPOINT;
+  spdlog::debug("Vertical Partition");
+  _sortCoordinates(partition_t::vertical, placements);
+  DEBUG_PRINT_FUNC(placements, _printCoordinateList);
+
+  BREAKPOINT;
+  spdlog::debug("Horizontal Partition");
+  _sortCoordinates(partition_t::horizontal, placements);
+  DEBUG_PRINT_FUNC(placements, _printCoordinateList);
 
   #ifndef DEBUG_PRINT
     _printCoordinateList(placements, outFile);
@@ -500,7 +526,7 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
   } // QPEngine::_printNetList()
 
 
-  [[nodiscard]] QPEngine::bVector_t QPEngine::coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
+  [[nodiscard]] QPEngine::bVector_t QPEngine::_coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
   // NRVO constructs everything in place
   size_t vectorSize = _getNumCoordinates(coordinateList);
   Eigen::VectorXd b_x(vectorSize);
@@ -511,9 +537,9 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     b_y(i) = y;
   }
   return std::pair{b_x, b_y};
-} // QPEngine::coordinateToVectorConversion()
+} // QPEngine::_coordinateToVectorConversion()
 
-[[nodiscard]] QPEngine::coordinateList_t QPEngine::vectorToCoordinateConversion(const bVector_t& bVector) const noexcept {
+[[nodiscard]] QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector_t& bVector) const noexcept {
   // NRVO constructs everything in place
   const auto& [b_x, b_y] = bVector;
   assert(b_x.size() == b_y.size()); // TODO: check
@@ -524,16 +550,16 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     coordinateList[i].second = b_y(i);
   }
   return coordinateList;
-} // QPEngine::vectorToCoordinateConversion()
+} // QPEngine::_vectorToCoordinateConversion()
 
 
   inline void QPEngine::_printBVector(const bVector_t& bVector) const noexcept{
-    const coordinateList_t coordinateList = vectorToCoordinateConversion(bVector);
+    const coordinateList_t coordinateList = _vectorToCoordinateConversion(bVector);
     _printCoordinateList(coordinateList);
   } // QPEngine::_printBVector()
 
 
-  [[nodiscard]] QPEngine::coordinateList_t QPEngine::generatePlacements(const matrix_t& m, const bVector_t& bVector) const {
+  [[nodiscard]] QPEngine::coordinateList_t QPEngine::_generatePlacements(const matrix_t& m, const bVector_t& bVector) const {
     const auto& [b_x, b_y] = bVector;
     // bounds check
     if ((b_x.size() != b_y.size()) || (b_x.size() != m.rows()) || (m.rows() != m.cols())) {
@@ -543,5 +569,18 @@ typename QPEngine::netList_t QPEngine::_readNetlist(std::ifstream& inFile) {
     Eigen::VectorXd placement_x = m.colPivHouseholderQr().solve(b_x);
     Eigen::VectorXd placement_y = m.colPivHouseholderQr().solve(b_y);
 
-    return vectorToCoordinateConversion(std::pair(placement_x, placement_y));
+    return _vectorToCoordinateConversion(std::pair(placement_x, placement_y));
   } // QPEngine::placements()
+
+
+  void QPEngine::_sortCoordinates(const partition_t p, coordinateList_t& coordinates) const noexcept {
+    std::sort(coordinates.begin(), coordinates.end(), 
+      [p](const auto& a, const auto& b) {
+        const auto& [a_x, a_y] = a;
+        const auto& [b_x, b_y] = b;
+        return (p == partition_t::horizontal) ?
+          (a_y == b_y ? a_x < b_x : a_y < b_y) :
+          (a_x == b_x ? a_y < b_y : a_x < b_x);
+      }
+    );
+  }
