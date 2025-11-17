@@ -94,6 +94,7 @@ inline void DEBUG(Args&&...) {}
 
 #ifndef INITIAL_PARTITION
   #define INITIAL_PARTITION QPEngine::partition_t::vertical
+  // #define INITIAL_PARTITION QPEngine::partition_t::horizontal
 # endif
 
 class QPEngine {
@@ -770,8 +771,13 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     /* init partition */
     partition_t initialPartition = INITIAL_PARTITION;
     /* recursively partition */
-    _place(placedGateCoordinateList, portCoordinateList, portNetList, d, initialPartition);
+    coordinateList_t placements = _place(placedGateCoordinateList, portCoordinateList, portNetList, d, initialPartition);
     /* print output */
+    // #ifndef DEBUG_PRINT
+    // _printCoordinateList(placements, outFile);
+    // #endif
+    spdlog::debug("placements");
+    _printCoordinateList(placements, std::cout);
   }
 
 
