@@ -98,7 +98,7 @@ inline void DEBUG(Args&&...) {}
 class QPEngine {
     public:
     QPEngine() noexcept = default;
-    QPEngine(size_t recCount) noexcept : recCount_(recCount) {}
+    QPEngine(size_t numPartitions) noexcept : numPartitions_(numPartitions) {}
 
     /* public typdefs */
     using vector_t = std::vector<float>; 
@@ -114,19 +114,16 @@ class QPEngine {
      * @param inFile 
      * @param outFile 
      */
-    [[deprecated("Use place instead")]] void run(std::ifstream& inFile, std::ofstream& outFile);
-
-
     void place(std::ifstream& inFile, std::ofstream& outFile);
 
 
     private:
     /* private types */
-    using coordinateList_t = std::unordered_map<std::pair<size_t, coordinate_t>>;
+    using coordinateList_t = std::vector<std::pair<size_t, coordinate_t>>;
     // note that the size_t is the index of the gate and not the gate number
     using assignedGate_t = std::vector<std::pair<size_t, coordinate_t>>;
     // map from net to gate/port
-    using netList_t = std::unordered_map<size_t, <std::vector<size_t>>>;
+    using netList_t = std::unordered_map<size_t, std::vector<size_t>>;
     using bVector_t = std::pair<Eigen::VectorXd, Eigen::VectorXd>;
     
     // deprecated
@@ -145,8 +142,8 @@ class QPEngine {
       size_t bottom_;
       size_t left_;
       size_t right_;
-      dimension(size_t top, bottom, left, right) :
-        top_(top_), bottom_(bottom_), left_(left_), right_(right_){}
+      dimension(size_t top, size_t bottom, size_t left, size_t right) :
+        top_(top), bottom_(bottom), left_(left), right_(right){}
         /**
          * @brief Generates a pair of the new dimensions for the appropriate partition
          * 
@@ -228,8 +225,8 @@ class QPEngine {
      */
     inline void _printCoordinateList(const coordinateList_t& coordinateList, std::ostream& os = std::cout) const noexcept;
     inline void _printMatrix(const matrix_t& m) const noexcept;
-    inline void _printNetList(const netList_t& netToGateAndPortListMap) const noexcept;
-    inline void _printBVector(const bVector_t& bVector) const noexcept;
+    inline void _printNetList(const netList_t& netList) const noexcept;
+    inline void _printBVector(const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const noexcept;
     inline void _printAssignedGates(const assignedGate_t& assignedGates, std::ostream& os = std::cout) const noexcept;
 
 
@@ -301,7 +298,7 @@ class QPEngine {
 
 
 
-    [[nodiscard]] coordinateList_t _initializeGateCoordinateList() const noexcept;
+    [[nodiscard]] const coordinateList_t _initializeGateCoordinateList() const noexcept;
   
 
 
@@ -322,21 +319,15 @@ class QPEngine {
 
 // TODO: switch main to a different file
 int main(int argc, char** argv) {
-  std::cout << "Getting here\n";
-  if (argc != 3) {
-    std::cerr << "Error. Did not specify inFile and\
-        outFile paths for the Netlist" << std::endl;
-  }
-
-  
+  // cancel synch with cstdio
+  std::ios_base::sync_with_stdio(false);
   #ifdef DEBUG_PRINT
   spdlog::set_level(spdlog::level::debug);
   #else
   spdlog::set_level(spdlog::level::info);
   #endif
-
-  // cancel synch with cstdio
-  std::ios_base::sync_with_stdio(false);
+  spdlog::debug("Getting here\n");
+  assert(argc == 3);
 
   try {
     std::ifstream inFile(argv[1]);
@@ -348,7 +339,8 @@ int main(int argc, char** argv) {
     return 1; // TODO: look at the error codes
     }
     QPEngine placer = QPEngine(3);
-    placer.run(inFile, outFile);
+    // placer.run(inFile, outFile);
+    placer.place(inFile, outFile);
     inFile.close();
     outFile.close();
   } 
@@ -370,64 +362,12 @@ void QPEngine::_checkBounds(const size_t val, const size_t bound, const std::str
 } // QPEngine::_checkBounds()
 
 
-// void QPEngine::run(std::ifstream& inFile, std::ofstream& outFile) {
-//   /* read the input file and generate netlist and gloabl portToCoordinateMap_*/
-//   BREAKPOINT;
-//   spdlog::debug("Reading Nelist");
-//   netList_t netToGateAndPortListMap = _readNetlist(inFile);
-//   DEBUG_PRINT_FUNC(_printNetList, netToGateAndPortListMap);
-//   DEBUG_PRINT_FUNC(_printCoordinateList, portToCoordinateMap_);
-
-//   /* generate cMatrix */
-//   BREAKPOINT;
-//   spdlog::debug("Creating cMatrix");
-//   matrix_t c = _createCMatrix(netToGateAndPortListMap);
-//   DEBUG_PRINT_FUNC(_printMatrix, c);
-  
-//   /* generate aMatrix */
-//   BREAKPOINT;
-//   spdlog::debug("Creating aMatrix");
-//   matrix_t a = _createAMatrix(c, netToGateAndPortListMap);
-//   DEBUG_PRINT_FUNC(_printMatrix, a);
-
-//   /* generate bVector */
-//   BREAKPOINT;
-//   spdlog::debug("Creating BVector");
-//   bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
-//   DEBUG_PRINT_FUNC(_printBVector, bVector);
-  
-//   /* generate placements */
-//   BREAKPOINT;
-//   spdlog::debug("Generating Placements");
-//   coordinateList_t placements = _generatePlacements(a, bVector);
-//   DEBUG_PRINT_FUNC(_printCoordinateList, placements);
-
-//   /* partition */
-//   BREAKPOINT;
-//   spdlog::debug("Vertical Partition");
-//   assignedGate_t assignedGates = _assignBlocks(partition_t::vertical, placements);
-//   DEBUG_PRINT_FUNC(_printAssignedGates, assignedGates, std::cout);
-
-//   BREAKPOINT;
-//   spdlog::debug("Horizontal Partition");
-//   assignedGate_t assignedGatesH = _assignBlocks(partition_t::horizontal, placements);
-//   DEBUG_PRINT_FUNC(_printAssignedGates, assignedGatesH, std::cout);
-
-//   #ifndef DEBUG_PRINT
-//     _printCoordinateList(placements, outFile);
-//   #endif
-
-//   BREAKPOINT;
-// }
-
 std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlist(std::ifstream& inFile) {
   // read num gates and nets
   size_t numNets;
   inFile >> numGates_ >> numNets;
 
-  // gateNetList_
   netList_t portNetList;
-
   coordinateList_t portCoordinateList;
 
   // note: using the word port for pads
@@ -445,7 +385,7 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
       size_t gate, numTmpNets, net;
       // reading a gate to gate connection
       ss >> gate; --gate;
-      _checkBounds(gate, numGates, "Input gate greater than number of gates");
+      _checkBounds(gate, numGates_, "Input gate greater than number of gates");
       // read port line
       // if (ss.eof()) {
       if (!(ss >> numTmpNets)) {
@@ -460,7 +400,7 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
         --net;
         _checkBounds(net, numNets, "Input net greater than number of nets");
         // the weight for these is assumed to be 1
-        netToGateAndPortListMap[net].first[gate] = 1;
+        gateNetList_[net][gate] = 1;
       }
     } else {
       size_t port, net, x, y;
@@ -468,14 +408,14 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
       ss >> port >> net >> x >> y;
       _checkBounds((--port), numPorts, "Input port greater than number of ports");
       _checkBounds((--net), numNets, "Input net greater than number of nets");
-      portNetList[net].[port] = 1;
+      portNetList[net][port] = 1;
       portCoordinateList.push_back(std::make_pair(port, std::make_pair(x, y)));
     }
   }
-  return netToGateAndPortListMap;
+  return {portNetList, portCoordinateList};
 } // QPEngine::readNetlist()
 
-[[nodiscard]] QPEngine::matrix_t QPEngine::_createCMatrix(const QPEngine::coordinateList_t& gateCoordinateList) const noexcept {
+const QPEngine::matrix_t QPEngine::_createCMatrix(const QPEngine::coordinateList_t& gateCoordinateList) const noexcept {
   size_t numGates = _getNumCoordiantes(gateCoordinateList);
   // create the cMatrix by determing where the connections exist
   matrix_t c = matrix_t::Zero(numGates, numGates);
@@ -484,9 +424,9 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
         for (size_t j = i+1; j < numGates; ++j) {
           // ensure that it's in the gateCoordinateList and they are both
           // connected to the netlist
-          gateOne = gateCoordinateList[i].first;
-          gateTwo = gateCoordinateList[j].first;
-          if(static_cast<int>(netGates[gateOne] && netGates[gateTwo])) {
+          size_t gateOneIndex = gateCoordinateList[i].first;
+          size_t gateTwoIndex = gateCoordinateList[j].first;
+          if(static_cast<int>(gates[gateOneIndex] && gates[gateTwoIndex])) {
             c(i,j) = 1;
             c(j,i) = 1;
           }
@@ -497,7 +437,7 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
   } // QPEngine::_createCMatrix()
   
   
-  QPEngine::matrix_t 
+  const QPEngine::matrix_t 
   QPEngine::_createAMatrix(const matrix_t& c, const netList_t& portNetList, const coordinateList_t& gateCoordinateList) const {
     size_t numGates = _getNumCoordiantes(gateCoordinateList);
     if (numGates > c.rows() || numGates > c.cols()) throw std::runtime_error("Matrix c size too small");
@@ -511,7 +451,8 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
           for (const auto &[net, gates]: gateNetList_) {
             if (gates[gateIndex] && static_cast<bool>(portNetList.count(net))) {
               // net is connect to the gate
-              portWireSum += std::accumulate(portNetList[net].begin(), portNetList[net].end(), 0);
+              const auto& ports = portNetList.at(net);
+              portWireSum += std::accumulate(ports.begin(), ports.end(), 0);
             }
           }
           // sum up this row in the c matrix
@@ -530,24 +471,24 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
 
 
   // see where to throw the exceptions here
-  [[nodiscard]] QPEngine::bVector_t
+  const QPEngine::bVector_t
   QPEngine::_createBVector(const netList_t& portNetList, const coordinateList_t& gateCoordianteList, const coordinateList_t& portCoordinateList) const noexcept {
     size_t numGates = _getNumCoordinates(gateCoordianteList);
     size_t numPorts = _getNumCoordinates(portCoordinateList);
     Eigen::VectorXd b_x = Eigen::VectorXd::Zero(numGates);
     Eigen::VectorXd b_y = Eigen::VectorXd::Zero(numGates);
     for (int gate = 0; gate < numGates_; ++gate) {
-      gateIndex = gateCoordianteList[gate].first;
+      size_t gateIndex = gateCoordianteList[gate].first;
       for (const auto &[net, gates]: gateNetList_) {
         if (gates[gateIndex]) {
           // net is connect to the gate
           for (int port = 0; port < numPorts; ++port) {
-            portIndex = portCoordinateList[port].first;
-            if (portNetList.count(net) && portNetList[net][portIndex]) {
+            size_t portIndex = portCoordinateList[port].first;
+            if (portNetList.count(net) && portNetList.at(net)[portIndex]) {
               // net is connect to port
               // append the coordinate * the weight (netPorts[port]) of the wire (1) to this
-              b_x(gate) += portToCoordinateMap[port].first;
-              b_y(gate) += portToCoordinateMap[port].second;
+              b_x(gate) += portCoordinateList[port].second.first;
+              b_y(gate) += portCoordinateList[port].second.second;
             }
           }
         }
@@ -573,7 +514,7 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
     DEBUG_PRINT_FUNC([](const std::string& s) {fmt::print("{}", s);}, "Printing assigned gates list\n");
     for (const auto& [index, pos]: coordinateList) {
       const auto& [x, y] = pos;
-      os << fmt::format("{:d} {:.9f} {:.9f}\n", i+1, x, y);
+      os << fmt::format("{:d} {:.9f} {:.9f}\n", index, x, y);
     }
   } // QPEngine::_printCoordinateList()
 
@@ -607,50 +548,50 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
     fmt::print("{}\n", m);
   } // QPEngine::_printMatrix()
 
-  inline void QPEngine::_printNetList(const netList_t& netToGateAndPortListMap) const noexcept {
-    for (int net = 0; net < netToGateAndPortListMap.size(); ++net) {
+  inline void QPEngine::_printNetList(const netList_t& netList) const noexcept {
+    for (auto &[net, connections]: netList) {
       size_t i = 0;
       fmt::print("Net: {:d}\n\tGates:", (net+1));
-      FOR_EACH(netToGateAndPortListMap[net].first, ([&i](const auto gate){++i; if(static_cast<bool>(gate)){fmt::print("{:d},", i);}}));
-      fmt::print("\n\tPorts:");
-      i = 0;
-      FOR_EACH(netToGateAndPortListMap[net].second, ([&i](const auto port){++i; if(static_cast<bool>(port)) { fmt::print("{:d},", i);}}));
+      FOR_EACH(connections, ([&i](const auto gate){++i; if(static_cast<bool>(gate)){fmt::print("{:d},", i);}}));
       fmt::print("\n");
     }
+    fmt::print("\n");
   } // QPEngine::_printNetList()
 
 
-  [[nodiscard]] QPEngine::bVector_t QPEngine::_coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
-  // NRVO constructs everything in place
-  // Note that the vector must always be the size of the whole matrix
-  // in order to keep track of the indecies. This leads to some pretty
-  // sparse vectors
-  size_t vectorSize = numGates_;
-  Eigen::VectorXd b_x(vectorSize);
-  Eigen::VectorXd b_y(vectorSize);
-  for (int i = 0; i < vectorSize; ++i) {
-    const auto &[x, y] = coordinateList[i];
-    b_x(i) = x;
-    b_y(i) = y;
-  }
-  return std::pair{b_x, b_y};
-} // QPEngine::_coordinateToVectorConversion()
+//   [[nodiscard]] QPEngine::bVector_t QPEngine::_coordinateToVectorConversion(const coordinateList_t& coordinateList) const noexcept {
+//   // NRVO constructs everything in place
+//   // Note that the vector must always be the size of the whole matrix
+//   // in order to keep track of the indecies. This leads to some pretty
+//   // sparse vectors
+//   size_t vectorSize = numGates_;
+//   Eigen::VectorXd b_x(vectorSize);
+//   Eigen::VectorXd b_y(vectorSize);
+//   for (int i = 0; i < vectorSize; ++i) {
+//     const auto &[x, y] = coordinateList[i];
+//     b_x(i) = x;
+//     b_y(i) = y;
+//   }
+//   return std::pair{b_x, b_y};
+// } // QPEngine::_coordinateToVectorConversion()
 
-[[nodiscard]] QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const noexcept {
+// Note that the original goordinate is the one previous to the placement in this case
+// It's needed here for the indexing
+QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const noexcept {
   // NRVO constructs everything in place
   const auto& [b_x, b_y] = bVector;
   assert(b_x.size() == b_y.size()); // TODO: check
   size_t vectorSize = b_x.size();
   coordinateList_t coordinateList(vectorSize);
   for (int i = 0; i < vectorSize; ++i) {
-    coordinateList[i] = std::pair(gateCoordinateList[i], std::pair(b_x(i), b_y(i)));
+    coordinateList[i] = std::pair(gateCoordinateList[i].first, std::pair(b_x(i), b_y(i)));
   }
   return coordinateList;
 } // QPEngine::_vectorToCoordinateConversion()
 
 
-  inline void QPEngine::_printBVector(const bVector_t& bVector) const noexcept{
-    const coordinateList_t coordinateList = _vectorToCoordinateConversion(bVector);
+  inline void QPEngine::_printBVector(const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const noexcept{
+    const coordinateList_t coordinateList = _vectorToCoordinateConversion(bVector, gateCoordinateList);
     _printCoordinateList(coordinateList);
   } // QPEngine::_printBVector()
 
@@ -679,19 +620,19 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
 
   QPEngine::assignedGate_t QPEngine::_assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept {
     assignedGate_t assignedGates(coordinates.size()); size_t i = 0;
-    std::transform(coordinates.begin(), coordinates.end(), assignedGates.begin(),
-    [&i](const auto& coordinate) { return std::pair(i++, coordinate); });
-    std::sort(assignedGates.begin(), assignedGates.end(), 
-      [p](const auto& a, const auto& b) {
-        const auto& [index_a, pos_a] = a;
-        const auto& [a_x, a_y] = pos_a;
-        const auto& [index_b, pos_b] = b;
-        const auto& [b_x, b_y] = pos_b;
-        return (p == partition_t::horizontal) ?
-          (a_y == b_y ? a_x < b_x : a_y < b_y) :
-          (a_x == b_x ? a_y < b_y : a_x < b_x);
-      }
-    );
+    // std::transform(coordinates.begin(), coordinates.end(), assignedGates.begin(),
+    // [&i](const auto& coordinate) { return std::pair(i++, coordinate); });
+    // std::sort(assignedGates.begin(), assignedGates.end(), 
+    //   [p](const auto& a, const auto& b) {
+    //     const auto& [index_a, pos_a] = a;
+    //     const auto& [a_x, a_y] = pos_a;
+    //     const auto& [index_b, pos_b] = b;
+    //     const auto& [b_x, b_y] = pos_b;
+    //     return (p == partition_t::horizontal) ?
+    //       (a_y == b_y ? a_x < b_x : a_y < b_y) :
+    //       (a_x == b_x ? a_y < b_y : a_x < b_x);
+    //   }
+    // );
     return assignedGates;
   } // QPEngine::_assignBlocks()
 
@@ -805,11 +746,28 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
 
   void QPEngine::place(std::ifstream& inFile, std::ofstream& outFile) {
     /* read input file */
+    BREAKPOINT;
+    spdlog::debug("Reading Nelist");
     const auto [portNetList, portCoordinateList] = _readNetlist(inFile);
+    spdlog::debug("gateNelist_:");
+    DEBUG_PRINT_FUNC(_printNetList, gateNetList_);
+    spdlog::debug("portNelist:");
+    DEBUG_PRINT_FUNC(_printNetList, portNetList);
+    spdlog::debug("portCoordinateList:");
+    DEBUG_PRINT_FUNC(_printCoordinateList, portCoordinateList);
+
     /* zero init the zeroGateCoordinateList */
-    coordinateList_t zeroGateCoordinateList = _initializeGateCoordinateList();
+    BREAKPOINT;
+    spdlog::debug("zeroGateCoordinateList:");
+    const coordinateList_t zeroGateCoordinateList = _initializeGateCoordinateList();
+    DEBUG_PRINT_FUNC(_printCoordinateList, zeroGateCoordinateList);
+
     /* generate placements */
-    placedGateCoordinateList = _generatePlacements(zeroGateCoordinateList, portCoordinateList, portNetList);
+    BREAKPOINT;
+    coordinateList_t placedGateCoordinateList = _generatePlacements(zeroGateCoordinateList, portCoordinateList, portNetList);
+    spdlog::debug("placedGateCoordinateList:");
+    DEBUG_PRINT_FUNC(_printCoordinateList, placedGateCoordinateList);
+    
     /* init dimension */
     dimension d(0, INITIAL_BOTTOM, 0, INITIAL_RIGHT);
     /* init partition */
@@ -828,9 +786,9 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
   } // QPEngine::dimension::generateDimensions()
 
 
-  QPEngine::coordinateList_t QPEngine::_initializeGateCoordinateList() const noexcept {
+  const QPEngine::coordinateList_t QPEngine::_initializeGateCoordinateList() const noexcept {
     coordinateList_t zeroGateCoordinateList(numGates_);
-    for (size_t i = 1; i <= numGates; ++i) {
+    for (size_t i = 1; i <= numGates_; ++i) {
       zeroGateCoordinateList[i-1].first = i;
     }
     return zeroGateCoordinateList;
@@ -840,60 +798,29 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
   QPEngine::coordinateList_t 
   QPEngine::_generatePlacements(const coordinateList_t& gateCoordinateList,
     const coordinateList_t& portCoordinateList, const netList_t& portNetList) const {
-    // create cMatrix(gateCoordinateList); 
-    //     create aMatrix(gateCoordinateList, portNetList);
-    //     create bVector(gateCoordinateList, portCoordinateList, portNetList);
-      matrix_t c = _createCMatrix(gateCoordinateList);
-      matrix_t a = _createAMatrix(c, portNetList, gateCoordinateList);
-      bVector_t b = _createBVector(portNetList, gateCoordinateList, portCoordinateList);
-      return _solveLinearSystem(m, b, gateCoordinateList);
+    
+    /* generate cMatrix */
+    BREAKPOINT;
+    matrix_t c = _createCMatrix(gateCoordinateList);
+    DEBUG_PRINT_FUNC(_printMatrix, c);
+
+    /* generate aMatrix */
+    BREAKPOINT;
+    spdlog::debug("Creating aMatrix");
+    matrix_t a = _createAMatrix(c, portNetList, gateCoordinateList);
+    DEBUG_PRINT_FUNC(_printMatrix, a);
+
+    // /* generate bVector */
+    BREAKPOINT;
+    spdlog::debug("Creating BVector");
+    bVector_t b = _createBVector(portNetList, gateCoordinateList, portCoordinateList);
+      
+    // /* generate placements */
+    BREAKPOINT;
+    spdlog::debug("Generating Placements");
+    // return _solveLinearSystem(a, b, gateCoordinateList);
+    coordinateList_t placements = _solveLinearSystem(a, b, gateCoordinateList);
+    DEBUG_PRINT_FUNC(_printCoordinateList, placements);
+    return placements;
   } // QPEngine::placements()
 
-
-  //   /* read the input file and generate netlist and gloabl portToCoordinateMap_*/
-  // BREAKPOINT;
-  // spdlog::debug("Reading Nelist");
-  // netList_t netToGateAndPortListMap = _readNetlist(inFile);
-  // DEBUG_PRINT_FUNC(_printNetList, netToGateAndPortListMap);
-  // DEBUG_PRINT_FUNC(_printCoordinateList, portToCoordinateMap_);
-
-  // /* generate cMatrix */
-  // BREAKPOINT;
-  // spdlog::debug("Creating cMatrix");
-  // matrix_t c = _createCMatrix(netToGateAndPortListMap);
-  // DEBUG_PRINT_FUNC(_printMatrix, c);
-  
-  // /* generate aMatrix */
-  // BREAKPOINT;
-  // spdlog::debug("Creating aMatrix");
-  // matrix_t a = _createAMatrix(c, netToGateAndPortListMap);
-  // DEBUG_PRINT_FUNC(_printMatrix, a);
-
-  // /* generate bVector */
-  // BREAKPOINT;
-  // spdlog::debug("Creating BVector");
-  // bVector_t bVector = _createBVector(netToGateAndPortListMap, portToCoordinateMap_);
-  // DEBUG_PRINT_FUNC(_printBVector, bVector);
-  
-  // /* generate placements */
-  // BREAKPOINT;
-  // spdlog::debug("Generating Placements");
-  // coordinateList_t placements = _generatePlacements(a, bVector);
-  // DEBUG_PRINT_FUNC(_printCoordinateList, placements);
-
-  // /* partition */
-  // BREAKPOINT;
-  // spdlog::debug("Vertical Partition");
-  // assignedGate_t assignedGates = _assignBlocks(partition_t::vertical, placements);
-  // DEBUG_PRINT_FUNC(_printAssignedGates, assignedGates, std::cout);
-
-  // BREAKPOINT;
-  // spdlog::debug("Horizontal Partition");
-  // assignedGate_t assignedGatesH = _assignBlocks(partition_t::horizontal, placements);
-  // DEBUG_PRINT_FUNC(_printAssignedGates, assignedGatesH, std::cout);
-
-  // #ifndef DEBUG_PRINT
-  //   _printCoordinateList(placements, outFile);
-  // #endif
-
-  // BREAKPOINT;
