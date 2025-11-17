@@ -247,18 +247,36 @@ class QPEngine {
      * @param bVector 
      * @return QPEngine::coordinateList_t 
      */
-    [[nodiscard]] coordinateList_t _vectorToCoordinateConversion(const bVector_t& bVector) const noexcept;
+    [[nodiscard]] coordinateList_t _vectorToCoordinateConversion(const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const noexcept;
 
 
     /**
      * @brief Gicen a matrix_t m and bVector_t b (with b_x and b_y), solves for the
      * coordinates of all of the gates in the matrix
+     * Uses indecies from the given coordinate list
      * 
      * @param m 
      * @param bVector 
      * @return coordinateList_t 
      */
-    [[nodiscard]] coordinateList_t _generatePlacements(const matrix_t& m, const bVector_t& bVector) const;
+    [[nodiscard]] coordinateList_t _solveLinearSystem(const matrix_t& m, const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const;
+
+
+    /**
+     * @brief Does this:
+     * Creates cMatrix
+     * Creates aMatrix
+     * Creates bVector
+     * Solves the lenear system
+     * Returns the placedGateCoordinateList
+     * 
+     * @param gateCoordinateList 
+     * @param portCoordinateList 
+     * @param portNetList 
+     * @return coordinateList_t 
+     */
+    [[nodiscard]] coordinateList_t _generatePlacements(const coordinateList_t& gateCoordinateList,
+    const coordinateList_t& portCoordinateList, const netList_t& portNetList) const;
 
 
     /**
@@ -514,15 +532,18 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
   // see where to throw the exceptions here
   [[nodiscard]] QPEngine::bVector_t
   QPEngine::_createBVector(const netList_t& portNetList, const coordinateList_t& gateCoordianteList, const coordinateList_t& portCoordinateList) const noexcept {
-    size_t numPorts = _getNumCoordinates(portToCoordinateMap);
+    size_t numGates = _getNumCoordinates(gateCoordianteList);
+    size_t numPorts = _getNumCoordinates(portCoordinateList);
     Eigen::VectorXd b_x = Eigen::VectorXd::Zero(numGates);
     Eigen::VectorXd b_y = Eigen::VectorXd::Zero(numGates);
     for (int gate = 0; gate < numGates_; ++gate) {
-      for (const auto &[netGates, netPorts]: netToGateAndPortListMap) {
-        if (netGates[gate]) {
+      gateIndex = gateCoordianteList[gate].first;
+      for (const auto &[net, gates]: gateNetList_) {
+        if (gates[gateIndex]) {
           // net is connect to the gate
           for (int port = 0; port < numPorts; ++port) {
-            if (netPorts[port]) {
+            portIndex = portCoordinateList[port].first;
+            if (portNetList.count(net) && portNetList[net][portIndex]) {
               // net is connect to port
               // append the coordinate * the weight (netPorts[port]) of the wire (1) to this
               b_x(gate) += portToCoordinateMap[port].first;
@@ -615,14 +636,14 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
   return std::pair{b_x, b_y};
 } // QPEngine::_coordinateToVectorConversion()
 
-[[nodiscard]] QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector_t& bVector) const noexcept {
+[[nodiscard]] QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const noexcept {
   // NRVO constructs everything in place
   const auto& [b_x, b_y] = bVector;
   assert(b_x.size() == b_y.size()); // TODO: check
   size_t vectorSize = b_x.size();
   coordinateList_t coordinateList(vectorSize);
   for (int i = 0; i < vectorSize; ++i) {
-    coordinateList[i] = std::pair(b_x(i), b_y(i));
+    coordinateList[i] = std::pair(gateCoordinateList[i], std::pair(b_x(i), b_y(i)));
   }
   return coordinateList;
 } // QPEngine::_vectorToCoordinateConversion()
@@ -638,21 +659,21 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
    * @brief Deprecated
    * 
    */
-  // [[nodiscard]] QPEngine::coordinateList_t QPEngine::_generatePlacements(const matrix_t& m, const bVector_t& bVector) const {
-  //   // create cMatrix(gateCoordinateList); 
-  //   //     create aMatrix(gateCoordinateList, portNetList);
-  //   //     create bVector(gateCoordinateList, portCoordinateList, portNetList);
-  //   const auto& [b_x, b_y] = bVector;
-  //   // bounds check
-  //   if ((b_x.size() != b_y.size()) || (b_x.size() != m.rows()) || (m.rows() != m.cols())) {
-  //     BREAKPOINT;
-  //     throw std::runtime_error("Invalid matrix or bvector dimensions for QR decomposition");
-  //   }
-  //   Eigen::VectorXd placement_x = m.colPivHouseholderQr().solve(b_x);
-  //   Eigen::VectorXd placement_y = m.colPivHouseholderQr().solve(b_y);
+  [[nodiscard]] QPEngine::coordinateList_t QPEngine::_solveLinearSystem(const matrix_t& m, const bVector_t& bVector, const coordinateList_t& gateCoordinateList) const {
+    // create cMatrix(gateCoordinateList); 
+    //     create aMatrix(gateCoordinateList, portNetList);
+    //     create bVector(gateCoordinateList, portCoordinateList, portNetList);
+    const auto& [b_x, b_y] = bVector;
+    // bounds check
+    if ((b_x.size() != b_y.size()) || (b_x.size() != m.rows()) || (m.rows() != m.cols())) {
+      BREAKPOINT;
+      throw std::runtime_error("Invalid matrix or bvector dimensions for QR decomposition");
+    }
+    Eigen::VectorXd placement_x = m.colPivHouseholderQr().solve(b_x);
+    Eigen::VectorXd placement_y = m.colPivHouseholderQr().solve(b_y);
 
-  //   return _vectorToCoordinateConversion(std::pair(placement_x, placement_y));
-  // } // QPEngine::placements()
+    return _vectorToCoordinateConversion(std::pair(placement_x, placement_y), gateCoordinateList);
+  } // QPEngine::placements()
 
 
 
@@ -788,7 +809,7 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
     /* zero init the zeroGateCoordinateList */
     coordinateList_t zeroGateCoordinateList = _initializeGateCoordinateList();
     /* generate placements */
-    _generatePlacements(zeroGateCoordinateList, portCoordinateList, portNetList);
+    placedGateCoordinateList = _generatePlacements(zeroGateCoordinateList, portCoordinateList, portNetList);
     /* init dimension */
     dimension d(0, INITIAL_BOTTOM, 0, INITIAL_RIGHT);
     /* init partition */
@@ -825,17 +846,7 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
       matrix_t c = _createCMatrix(gateCoordinateList);
       matrix_t a = _createAMatrix(c, portNetList, gateCoordinateList);
       bVector_t b = _createBVector(portNetList, gateCoordinateList, portCoordinateList);
-
-    // const auto& [b_x, b_y] = bVector;
-    // // bounds check
-    // if ((b_x.size() != b_y.size()) || (b_x.size() != m.rows()) || (m.rows() != m.cols())) {
-    //   BREAKPOINT;
-    //   throw std::runtime_error("Invalid matrix or bvector dimensions for QR decomposition");
-    // }
-    // Eigen::VectorXd placement_x = m.colPivHouseholderQr().solve(b_x);
-    // Eigen::VectorXd placement_y = m.colPivHouseholderQr().solve(b_y);
-
-    // return _vectorToCoordinateConversion(std::pair(placement_x, placement_y));
+      return _solveLinearSystem(m, b, gateCoordinateList);
   } // QPEngine::placements()
 
 
