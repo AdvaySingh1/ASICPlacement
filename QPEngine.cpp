@@ -399,15 +399,19 @@ std::pair<QPEngine::netList_t, QPEngine::coordinateList_t> QPEngine::_readNetlis
       while (ss >> net) {
         --net;
         _checkBounds(net, numNets, "Input net greater than number of nets");
+        // might have to resize
+        if (!gateNetList_.count(net)) gateNetList_[net].resize(numGates_);
         // the weight for these is assumed to be 1
         gateNetList_[net][gate] = 1;
       }
     } else {
+      BREAKPOINT;
       size_t port, net, x, y;
       // reading a port to gate connection
       ss >> port >> net >> x >> y;
       _checkBounds((--port), numPorts, "Input port greater than number of ports");
       _checkBounds((--net), numNets, "Input net greater than number of nets");
+      if (!portNetList.count(net)) portNetList[net].resize(numPorts);
       portNetList[net][port] = 1;
       portCoordinateList.push_back(std::make_pair(port, std::make_pair(x, y)));
     }
@@ -767,7 +771,7 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     coordinateList_t placedGateCoordinateList = _generatePlacements(zeroGateCoordinateList, portCoordinateList, portNetList);
     spdlog::debug("placedGateCoordinateList:");
     DEBUG_PRINT_FUNC(_printCoordinateList, placedGateCoordinateList);
-    
+
     /* init dimension */
     dimension d(0, INITIAL_BOTTOM, 0, INITIAL_RIGHT);
     /* init partition */
