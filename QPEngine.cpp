@@ -118,19 +118,6 @@ class QPEngine {
     void place(std::ifstream& inFile, std::ofstream& outFile);
 
 
-    /**
-     * @brief Place helper which recursively does the partitioning
-     * 
-     * @param inFile 
-     * @param outFile 
-     */
-    [[nodiscard]] const coordinateList_t _place(
-      coordinateList_t& gateCoordinateList,
-      const coordinateList_t&  portCoordinateList, 
-      const netList_t& portNetList,
-      const dimension& d, 
-      const partition_t partition);
-
 
     private:
     /* private types */
@@ -168,9 +155,26 @@ class QPEngine {
          */
       [[nodiscard]] std::pair<dimension, dimension> generateDimensions(partition_t partition) const noexcept;
 
-      std::ostream& operator << (std::ostream& os) const noexcept;
+      // std::ostream& operator << (std::ostream& os) const noexcept;
+
     };
+    // in order for the struct to be able to fmt::format or print dimension
+    friend struct fmt::formatter<QPEngine::dimension>;
     /* helper functions */
+    
+    /**
+     * @brief Place helper which recursively does the partitioning
+     * 
+     * @param inFile 
+     * @param outFile 
+     */
+    [[nodiscard]] const coordinateList_t _place(
+      coordinateList_t& gateCoordinateList,
+      const coordinateList_t&  portCoordinateList, 
+      const netList_t& portNetList,
+      const dimension& d, 
+      const partition_t partition);
+
     /**
      * @brief Read the netlist into netToGateAndPortListMap
      * Also fills in portToCoordinateMap_
@@ -300,7 +304,7 @@ class QPEngine {
      * @param p 
      * @param coordinates 
      */
-    assignedGate_t _assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept;
+    void _assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept;
 
     /**
      * @brief Propagates the pads based on the side and the edge
@@ -343,7 +347,7 @@ struct fmt::formatter<QPEngine::dimension> {
     }
 
     template <typename FormatContext>
-    auto format(const dimension& d, FormatContext& ctx) {
+    auto format(const QPEngine::dimension& d, FormatContext& ctx) {
         return fmt::format_to(
             ctx.out(),
             "dimension(top={}, bottom={}, left={}, right={})",
@@ -657,7 +661,7 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
   } // QPEngine::placements()
 
 
-  QPEngine::assignedGate_t QPEngine::_assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept {
+  void QPEngine::_assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept {
     std::sort(coordinates.begin(), coordinates.end(),
     [p](const auto& a, const auto& b) {
         const auto& [index_a, pos_a] = a;
@@ -668,7 +672,6 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
           (a_y == b_y ? a_x < b_x : a_y < b_y) :
           (a_x == b_x ? a_y < b_y : a_x < b_x);
     });
-    return assignedGates;
   } // QPEngine::_assignBlocks()
 
 
@@ -767,7 +770,8 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     /* init partition */
     partition_t initialPartition = INITIAL_PARTITION;
     /* recursively partition */
-    return _place(placedGateCoordinateList, portCoordinateList, portNetList, dimension, partition);
+    _place(placedGateCoordinateList, portCoordinateList, portNetList, d, initialPartition);
+    /* print output */
   }
 
 
@@ -829,21 +833,21 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
   const dimension& d, 
   const partition_t partition) {
     /* check if partitions are still left */
-    if (!numPartition_--) return gateCoordinateList;
+    if (!numPartitions_--) return gateCoordinateList;
     
     /* generate new dimensions */
-    spdlog::debug("Previous dimension {} ", dimension);
+    spdlog::debug("Previous dimension {} ", d);
     const auto [firstDimension, secondDimension] = d.generateDimensions(partition);
     spdlog::debug("New First Dimension {} ", firstDimension);
     spdlog::debug("New Second Dimension {} ", secondDimension);
 
 
     /* assignedGateCoordinateList */
+    spdlog::debug("Generating Assignments");
     _assignBlocks(partition, gateCoordinateList); // now it's assignedGateCoordinateList 
+    DEBUG_PRINT_FUNC(_printCoordinateList, gateCoordinateList);
 
-    
-
-
+    return gateCoordinateList;
 
   }
 
