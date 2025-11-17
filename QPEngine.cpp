@@ -830,7 +830,64 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
   } // QPEngine::placements()
 
 
-// std::pair<netList_t, netList_t> _generateParitionedNetlist(const coordinateList_t& gateCoordinateList, const netList_t& portNetList)
+
+// the first half of the port list entries will now be the gates
+// while the second half comprises of the original ports
+
+/*
+  The issue is that the portCoordinate list is what we use to index
+  into the port list
+
+  This means, that we have to append firstPortNetList to the back
+  of the current portNetList. Additionally, we have to append the coordinates
+  to the back of the original portNetList
+
+  This means we can make the port list more sparse at this state
+  by only including the port coordinates which actually matter
+  to some of the gates.
+
+  However, the netlist type suffers since it's indexed by vectors
+  rather than an unordered map for each net.
+
+  An efficinet data type would have been the follwing:
+  using netList_t = std::unordered_map<size_t, std::unordered_map<size_t, size_t>>
+  where we could've packed values more sparsly
+*/
+std::pair<QPEngine::netList_t, QPEngine::netList_t QPEngine::_generateParitionedPortNetlists(
+  const coordinateList_t& gateCoordinateList, 
+  const netList_t& portNetList) {
+  /* split this based on the gateNetList_ and append that to the portNetList */
+  netList_t firstPortNetList, secondPortNetList;
+  numGates = _getNumCoordiantes(gateCoordinateList);
+  size_t i = 0;
+  /* generate for the first half */
+  for (; i < numGates/2; ++i) {
+    const auto& [firstGateIndex, _] = gateCoordinateList[i];
+    // determine which gates in the second half match
+    // TODO: this can be done a lot more efficiently
+    // by keeping track of something like a cMatrix
+    for (size_t j = numGates/2; j < numGates; ++j) {
+      const auto& [secondGateIndex, _] = gateCoordinateList[i];
+      for (const auto& [net, gates]: netlist_) {
+        if (gates[gateIndex] && gates[secondGateIndex]) {
+          if (!firstPortNetList.count(i) || !secondPortNetList.count(i)) {
+            firstPortNetList.resize(numGates_);
+            secondPortNetList.resize(numGates_);
+          }
+          firstPortNetList[net][j] = 1;
+          secondPortNetList[net][i] = 1;
+        }
+      }
+    }
+  }
+
+  /* append the netlist to the back of the original portlist */
+  netList_t appendedFirstPortNetList(portNetList);
+  netList_t appendedSecondPortNetList(portNetList);
+  std::copy(firstPortNetList.begin(), firstPortNetList.begin(), std::back_inserter(appendedFirstPortNetList));
+  std::copy(secondPortNetList.begin(), secondPortNetList.begin(), std::back_inserter(appendedsecondPortNetList));
+  return {appendedFirstPortNetList, appendedSecondPortNetList};
+}
 
   const QPEngine::coordinateList_t QPEngine::_place(
   coordinateList_t& gateCoordinateList,
@@ -852,6 +909,8 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     spdlog::debug("Generating Assignments");
     _assignBlocks(partition, gateCoordinateList); // now it's assignedGateCoordinateList 
     DEBUG_PRINT_FUNC(_printCoordinateList, gateCoordinateList);
+
+    const auto& [firstPortNetList, secondPortNetList] = _generateParitionedPortNetlists(gateCoordinateList, portNetList);
 
     return gateCoordinateList;
 
