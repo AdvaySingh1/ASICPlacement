@@ -44,6 +44,7 @@ struct fmt::formatter<Eigen::Matrix<T, Eigen::Dynamic, 1>> {
 };
 
 
+
 // breakpoint macro
 #ifdef DEBUG_BREAKPOINT
   #if defined(_MSC_VER)
@@ -117,6 +118,20 @@ class QPEngine {
     void place(std::ifstream& inFile, std::ofstream& outFile);
 
 
+    /**
+     * @brief Place helper which recursively does the partitioning
+     * 
+     * @param inFile 
+     * @param outFile 
+     */
+    [[nodiscard]] const coordinateList_t _place(
+      coordinateList_t& gateCoordinateList,
+      const coordinateList_t&  portCoordinateList, 
+      const netList_t& portNetList,
+      const dimension& d, 
+      const partition_t partition);
+
+
     private:
     /* private types */
     using coordinateList_t = std::vector<std::pair<size_t, coordinate_t>>;
@@ -142,6 +157,7 @@ class QPEngine {
       size_t bottom_;
       size_t left_;
       size_t right_;
+      dimension() = delete;
       dimension(size_t top, size_t bottom, size_t left, size_t right) :
         top_(top), bottom_(bottom), left_(left), right_(right){}
         /**
@@ -151,6 +167,8 @@ class QPEngine {
          * @return std::pair<dimension, dimension> 
          */
       [[nodiscard]] std::pair<dimension, dimension> generateDimensions(partition_t partition) const noexcept;
+
+      std::ostream& operator << (std::ostream& os) const noexcept;
     };
     /* helper functions */
     /**
@@ -315,6 +333,24 @@ class QPEngine {
     netList_t gateNetList_ = netList_t();
 
 }; // QPEngine
+
+
+// for dimensions
+template <>
+struct fmt::formatter<QPEngine::dimension> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin(); // No custom format specifiers
+    }
+
+    template <typename FormatContext>
+    auto format(const dimension& d, FormatContext& ctx) {
+        return fmt::format_to(
+            ctx.out(),
+            "dimension(top={}, bottom={}, left={}, right={})",
+            d.top_, d.bottom_, d.left_, d.right_
+        );
+    }
+}; // fmt::formatter<QPEngine::dimension>()
 
 
 // TODO: switch main to a different file
@@ -621,22 +657,17 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
   } // QPEngine::placements()
 
 
-
   QPEngine::assignedGate_t QPEngine::_assignBlocks(const partition_t p, coordinateList_t& coordinates) const noexcept {
-    assignedGate_t assignedGates(coordinates.size()); size_t i = 0;
-    // std::transform(coordinates.begin(), coordinates.end(), assignedGates.begin(),
-    // [&i](const auto& coordinate) { return std::pair(i++, coordinate); });
-    // std::sort(assignedGates.begin(), assignedGates.end(), 
-    //   [p](const auto& a, const auto& b) {
-    //     const auto& [index_a, pos_a] = a;
-    //     const auto& [a_x, a_y] = pos_a;
-    //     const auto& [index_b, pos_b] = b;
-    //     const auto& [b_x, b_y] = pos_b;
-    //     return (p == partition_t::horizontal) ?
-    //       (a_y == b_y ? a_x < b_x : a_y < b_y) :
-    //       (a_x == b_x ? a_y < b_y : a_x < b_x);
-    //   }
-    // );
+    std::sort(coordinates.begin(), coordinates.end(),
+    [p](const auto& a, const auto& b) {
+        const auto& [index_a, pos_a] = a;
+        const auto& [a_x, a_y] = pos_a;
+        const auto& [index_b, pos_b] = b;
+        const auto& [b_x, b_y] = pos_b;
+        return (p == partition_t::horizontal) ?
+          (a_y == b_y ? a_x < b_x : a_y < b_y) :
+          (a_x == b_x ? a_y < b_y : a_x < b_x);
+    });
     return assignedGates;
   } // QPEngine::_assignBlocks()
 
@@ -700,47 +731,6 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
         create bVector(gateCoordinateList, portCoordinateList, portNetList);
       }
       
-      _place(gateCoordinateList, portCoordinateList, portNetList, dimension, partition) {
-        if (!numPartition_--) return portCoordinateList;
-
-        // determine new dimensions
-        firstDimension = _firstDimension(dimension, partition);
-        secondDimension = _secondDimension(dimension, partition);
-
-        // assign gateCoordinateList
-        assignedGateCoordinateList = _assignBlocks(gateCoordinateList);
-
-        // generate sub-gateCoordinateList
-        firstGateCoordinateList = _firstHalf(assignedGateCoordinateList);
-        secondGateCoordinateList = _secondHalf(assignedGateCoordinateList);
-
-        // generate netlists (don't need any placements before this)
-        firstPortNetList = _generateNetlist(firstGateCoordinateList, secondGateCoordinateList, portNetList);
-        secondPortNetList = _generateNetlist(firstGateCoordinateList, firstGateCoordinateList, portNetList); // doesn't need to be placed here
-
-        // place first
-        firstPortCoordinateList = _propagatePads(secondGateCoordinateList, portCoordinateList, firstDimension);
-        placedFirstGateCoordinateList = _generatePlacements(firstGateCoordinateList, firstPortCoordinateList, firstPortNetList);
-
-        // place second
-        secondPortCoordinateList = _propagatePads(placedFirstGateCoordinateList, portCoordinateList, secondDimension);
-        placedSecondGateCoordinateList = _generatePlacements(secondGateCoordinateList, secondPortCoordinateList, secondPortNetList);
-
-        merge the placed gateCooordinateLists and return
-        placedFirstGateCoordinateList = _place(placedFirstGateCoordinateList, firstPortCoordinateList, firstPortNetList, firstDimension, notPartition);
-        placedSecondGateCoordinateList = _place(placedSecondGateCoordinateList, secondPortCoordinateList, secondPortNetList, secondDimension, notPartition);
-        return merge(placedFirstGateCoordinateList, placedSecondGateCoordinateList); 
-      }
-
-      place(inFile outFile) {
-        read inFile(generate gateNetList_, portCoordinateList, and portNetList);
-        zero initialize(gateCoordinateList);
-        placedGateCoordinateList = _generatePlacements(gateCoordinateList, portCoordinateList, portNetList);
-        init dimension;
-        init partition;
-
-        return _place(placedGateCoordinateList, portCoordinateList, portNetList, dimension, partition);
-      }
 
 
 
@@ -777,7 +767,7 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     /* init partition */
     partition_t initialPartition = INITIAL_PARTITION;
     /* recursively partition */
-    // return _place(placedGateCoordinateList, portCoordinateList, portNetList, dimension, partition);
+    return _place(placedGateCoordinateList, portCoordinateList, portNetList, dimension, partition);
   }
 
 
@@ -829,3 +819,77 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     return placements;
   } // QPEngine::placements()
 
+
+// std::pair<netList_t, netList_t> _generateParitionedNetlist(const coordinateList_t& gateCoordinateList, const netList_t& portNetList)
+
+  const QPEngine::coordinateList_t QPEngine::_place(
+  coordinateList_t& gateCoordinateList,
+  const coordinateList_t&  portCoordinateList, 
+  const netList_t& portNetList,
+  const dimension& d, 
+  const partition_t partition) {
+    /* check if partitions are still left */
+    if (!numPartition_--) return gateCoordinateList;
+    
+    /* generate new dimensions */
+    spdlog::debug("Previous dimension {} ", dimension);
+    const auto [firstDimension, secondDimension] = d.generateDimensions(partition);
+    spdlog::debug("New First Dimension {} ", firstDimension);
+    spdlog::debug("New Second Dimension {} ", secondDimension);
+
+
+    /* assignedGateCoordinateList */
+    _assignBlocks(partition, gateCoordinateList); // now it's assignedGateCoordinateList 
+
+    
+
+
+
+  }
+
+  /*
+
+        _place(gateCoordinateList, portCoordinateList, portNetList, dimension, partition) {
+        if (!numPartition_--) return gateCoordinateList;
+
+        // determine new dimensions
+        firstDimension = _firstDimension(dimension, partition);
+        secondDimension = _secondDimension(dimension, partition);
+
+        // assign gateCoordinateList
+        assignedGateCoordinateList = _assignBlocks(gateCoordinateList);
+
+        // generate sub-gateCoordinateList
+        firstGateCoordinateList = _firstHalf(assignedGateCoordinateList);
+        secondGateCoordinateList = _secondHalf(assignedGateCoordinateList);
+
+        // generate netlists (don't need any placements before this)
+        firstPortNetList = _generateNetlist(firstGateCoordinateList, secondGateCoordinateList, portNetList);
+        secondPortNetList = _generateNetlist(firstGateCoordinateList, firstGateCoordinateList, portNetList); // doesn't need to be placed here
+
+        // place first
+        firstPortCoordinateList = _propagatePads(secondGateCoordinateList, portCoordinateList, firstDimension);
+        placedFirstGateCoordinateList = _generatePlacements(firstGateCoordinateList, firstPortCoordinateList, firstPortNetList);
+
+        // place second
+        secondPortCoordinateList = _propagatePads(placedFirstGateCoordinateList, portCoordinateList, secondDimension);
+        placedSecondGateCoordinateList = _generatePlacements(secondGateCoordinateList, secondPortCoordinateList, secondPortNetList);
+
+        merge the placed gateCooordinateLists and return
+        placedFirstGateCoordinateList = _place(placedFirstGateCoordinateList, firstPortCoordinateList, firstPortNetList, firstDimension, notPartition);
+        placedSecondGateCoordinateList = _place(placedSecondGateCoordinateList, secondPortCoordinateList, secondPortNetList, secondDimension, notPartition);
+        return merge(placedFirstGateCoordinateList, placedSecondGateCoordinateList); 
+      }
+
+      place(inFile outFile) {
+        read inFile(generate gateNetList_, portCoordinateList, and portNetList);
+        zero initialize(gateCoordinateList);
+        placedGateCoordinateList = _generatePlacements(gateCoordinateList, portCoordinateList, portNetList);
+        init dimension;
+        init partition;
+
+        return _place(placedGateCoordinateList, portCoordinateList, portNetList, dimension, partition);
+      }
+
+
+  */
