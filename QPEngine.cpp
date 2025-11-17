@@ -792,8 +792,8 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
 
   const QPEngine::coordinateList_t QPEngine::_initializeGateCoordinateList() const noexcept {
     coordinateList_t zeroGateCoordinateList(numGates_);
-    for (size_t i = 1; i <= numGates_; ++i) {
-      zeroGateCoordinateList[i-1].first = i;
+    for (size_t i = 0; i < numGates_; ++i) {
+      zeroGateCoordinateList[i].first = i;
     }
     return zeroGateCoordinateList;
   } // QPEngine::_initializeGateCoordinateList()
@@ -805,6 +805,7 @@ QPEngine::coordinateList_t QPEngine::_vectorToCoordinateConversion(const bVector
     
     /* generate cMatrix */
     BREAKPOINT;
+    spdlog::debug("Creating cMatrix");
     matrix_t c = _createCMatrix(gateCoordinateList);
     DEBUG_PRINT_FUNC(_printMatrix, c);
 
